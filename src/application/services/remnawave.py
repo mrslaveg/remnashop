@@ -3,7 +3,7 @@ from enum import StrEnum
 
 from loguru import logger
 from redis.asyncio import Redis
-from remnapy.models.webhook import HwidUserDeviceDto, NodeDto, TorrentBlockerReportDto
+from remnawave.models.webhook import HwidUserDeviceDto, NodeDto, TorrentBlockerReportDto
 
 from src.application.common import BotService, EventPublisher
 from src.application.common.dao import SubscriptionDao, UserDao
