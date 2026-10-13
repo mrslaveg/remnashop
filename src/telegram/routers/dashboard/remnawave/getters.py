@@ -71,7 +71,7 @@ async def hosts_getter(
     result = await remnawave_sdk.hosts.get_all_hosts()
     hosts = []
 
-    for host in result.hosts:
+    for host in result.root:
         hosts.append(
             i18n.get(
                 "msg-remnawave-host-details",
@@ -110,7 +110,7 @@ async def nodes_getter(
     result = await remnawave_sdk.nodes.get_all_nodes()
     nodes = []
 
-    for node in result.nodes:
+    for node in result.root:
         nodes.append(
             i18n.get(
                 "msg-remnawave-node-details",
