@@ -10,7 +10,7 @@ dependencies = [
     "uvicorn>=0.38.0",
     "fastapi>=0.120.2",
     "python-multipart>=0.0.22",
-    "remnawave-api @ git+https://github.com/sm1ky/remnawave-api@production",
+    "remnawave-api @ git+https://github.com/sm1ky/remnawave-api@v3.0.1",
     #
     "dishka~=1.7.2",
     "adaptix==3.0.0b11",
