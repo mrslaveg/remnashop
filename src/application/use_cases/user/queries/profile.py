@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from loguru import logger
-from remnapy import RemnawaveSDK
-from remnapy.models import GetExternalSquadByUuidResponseDto
-from remnapy.models.hwid import HwidDeviceDto
+from remnawave import RemnawaveSDK
+from remnawave.models import GetExternalSquadByUuidResponseDto
+from remnawave.models.hwid import HwidDeviceDto
 
 from src.application.common import Interactor, Remnawave
 from src.application.common.dao import SettingsDao, SubscriptionDao, UserDao
