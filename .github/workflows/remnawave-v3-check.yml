@@ -1,5 +1,8 @@
 name: Remnawave v3 migration checks
 
+permissions:
+  contents: write
+
 on:
   push:
     branches:
@@ -21,6 +24,18 @@ jobs:
           enable-cache: true
       - name: Resolve dependencies
         run: uv sync --dev
+      - name: Commit regenerated lockfile
+        run: |
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock is already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "chore: refresh uv lockfile for Remnawave v3"
+          git push
+
       - name: Lint migrated files
         run: >-
           uv run ruff check
