@@ -5,7 +5,7 @@ from aiogram_dialog.widgets.common import ManagedScroll
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
-from remnapy import RemnawaveSDK
+from remnawave import RemnawaveSDK
 
 from src.application.common import TranslatorRunner
 from src.core.utils.converters import country_code_to_flag, percent
@@ -71,7 +71,7 @@ async def hosts_getter(
     result = await remnawave_sdk.hosts.get_all_hosts()
     hosts = []
 
-    for host in result:
+    for host in result.hosts:
         hosts.append(
             i18n.get(
                 "msg-remnawave-host-details",
@@ -110,7 +110,7 @@ async def nodes_getter(
     result = await remnawave_sdk.nodes.get_all_nodes()
     nodes = []
 
-    for node in result:
+    for node in result.nodes:
         nodes.append(
             i18n.get(
                 "msg-remnawave-node-details",
