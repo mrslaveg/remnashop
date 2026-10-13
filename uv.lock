@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 
 [[package]]
@@ -1077,19 +1077,6 @@ wheels = [
 ]
 
 [[package]]
-name = "remnapy"
-version = "2.7.1.dev4+g95e15ed2e"
-source = { git = "https://github.com/snoups/remnapy?rev=95e15ed#95e15ed2ea29aa62f112a8af790d6151f5db5fb1" }
-dependencies = [
-    { name = "cryptography" },
-    { name = "httpx" },
-    { name = "orjson" },
-    { name = "pydantic", extra = ["email"] },
-    { name = "pydantic-core" },
-    { name = "rapid-api-client" },
-]
-
-[[package]]
 name = "remnashop"
 version = "0.0.0"
 source = { virtual = "." }
@@ -1112,7 +1099,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "qrcode", extra = ["pil"] },
     { name = "redis" },
-    { name = "remnapy" },
+    { name = "remnawave-api" },
     { name = "sqlalchemy" },
     { name = "taskiq", extra = ["orjson"] },
     { name = "taskiq-redis" },
@@ -1152,7 +1139,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "qrcode", extras = ["pil"], specifier = ">=8.2" },
     { name = "redis", specifier = "~=7.0.0" },
-    { name = "remnapy", git = "https://github.com/snoups/remnapy?rev=95e15ed" },
+    { name = "remnawave-api", git = "https://github.com/sm1ky/remnawave-api?rev=v3.0.1" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "taskiq", extras = ["orjson"], specifier = "~=0.12.1" },
     { name = "taskiq-redis", specifier = "~=1.2.1" },
@@ -1170,6 +1157,18 @@ dev = [
     { name = "sqlalchemy", extras = ["mypy"], specifier = ">=2.0.0" },
     { name = "types-cachetools" },
     { name = "watchfiles", specifier = ">=1.1.1" },
+]
+
+[[package]]
+name = "remnawave-api"
+version = "3.0.1"
+source = { git = "https://github.com/sm1ky/remnawave-api?rev=v3.0.1#3f305f6dcc2e7f1b5892f3777fe5dcb65ce71472" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "httpx" },
+    { name = "orjson" },
+    { name = "pydantic", extra = ["email"] },
+    { name = "rapid-api-client" },
 ]
 
 [[package]]
