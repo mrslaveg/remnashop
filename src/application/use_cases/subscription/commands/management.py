@@ -442,13 +442,13 @@ class EnableTrialSubscription(Interactor[ChannelMemberEventDto, Optional[UserDto
         settings_dao: SettingsDao,
         user_dao: UserDao,
         subscription_dao: SubscriptionDao,
-        remnawave_sdk: RemnawaveSDK,
+        remnawave: Remnawave,
     ) -> None:
         self.uow = uow
         self.settings_dao = settings_dao
         self.user_dao = user_dao
         self.subscription_dao = subscription_dao
-        self.remnawave_sdk = remnawave_sdk
+        self.remnawave = remnawave
 
     async def _execute(self, actor: UserDto, data: ChannelMemberEventDto) -> Optional[UserDto]:
         settings = await self.settings_dao.get()
