@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from remnapy.enums import TrafficLimitStrategy
+from remnawave.enums import TrafficLimitStrategy
 
 from src.core.constants import UNLIMITED_EXPIRE_YEAR
 from src.core.enums import PlanType, SubscriptionStatus
