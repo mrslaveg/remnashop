@@ -44,13 +44,13 @@ class RemnawaveImpl(Remnawave):
     @staticmethod
     def _not_found(error: Exception) -> bool:
         response = getattr(error, "response", None)
-        status_code = getattr(response, "status_code", None)
+        status_code = getattr(error, "status_code", None) or getattr(response, "status_code", None)
         return status_code == 404 or "notfound" in type(error).__name__.lower()
 
     @staticmethod
     def _conflict(error: Exception) -> bool:
         response = getattr(error, "response", None)
-        status_code = getattr(response, "status_code", None)
+        status_code = getattr(error, "status_code", None) or getattr(response, "status_code", None)
         return status_code == 409 or "conflict" in type(error).__name__.lower()
 
     def _remember(self, payload: Any) -> RemnawaveUser:
