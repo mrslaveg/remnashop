@@ -102,7 +102,6 @@ module = [
     "fluent_compiler.*",
     "remnawave.*",
     "qrcode.*",
-    "remnapy.*",
 ]
 follow_untyped_imports = true
 
