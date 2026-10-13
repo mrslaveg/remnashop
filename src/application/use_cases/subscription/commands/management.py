@@ -47,9 +47,13 @@ class ToggleSubscriptionStatus(Interactor[int, SubscriptionStatus]):
         async with self.uow:
             try:
                 if is_now_active:
-                    await self.remnawave.enable_user(subscription.user_remna_id, username=target_user.remna_name)
+                    await self.remnawave.enable_user(
+                    subscription.user_remna_id, username=user.remna_name
+                )
                 else:
-                    await self.remnawave.disable_user(subscription.user_remna_id, username=target_user.remna_name)
+                    await self.remnawave.disable_user(
+                    subscription.user_remna_id, username=user.remna_name
+                )
             except Exception as e:
                 logger.error(f"External API error for user '{user_id}' while toggling status: {e}")
                 raise
@@ -395,7 +399,9 @@ class DisableTrialSubscription(Interactor[ChannelMemberEventDto, Optional[UserDt
 
         async with self.uow:
             try:
-                await self.remnawave.disable_user(subscription.user_remna_id, username=target_user.remna_name)
+                await self.remnawave.disable_user(
+                    subscription.user_remna_id, username=user.remna_name
+                )
             except Exception as e:
                 logger.error(
                     f"Failed to disable trial in remnawave for user '{data.telegram_id}': {e}"
@@ -484,7 +490,9 @@ class EnableTrialSubscription(Interactor[ChannelMemberEventDto, Optional[UserDto
 
         async with self.uow:
             try:
-                await self.remnawave.enable_user(subscription.user_remna_id, username=target_user.remna_name)
+                await self.remnawave.enable_user(
+                    subscription.user_remna_id, username=user.remna_name
+                )
             except Exception as e:
                 logger.error(
                     f"Failed to enable trial in remnawave for user '{data.telegram_id}': {e}"

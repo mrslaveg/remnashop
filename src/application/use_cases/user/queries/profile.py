@@ -109,7 +109,9 @@ class GetUserProfileSubscription(Interactor[int, GetUserProfileSubscriptionResul
         if not subscription:
             raise ValueError(f"Current subscription for user '{user_id}' not found")
 
-        remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id, username=target_user.remna_name)
+        remna_user = await self.remnawave.get_user_by_uuid(
+            subscription.user_remna_id, username=target_user.remna_name
+        )
         if not remna_user:
             raise ValueError(f"User Remnawave for '{user_id}' not found")
 
@@ -168,7 +170,9 @@ class GetUserDevices(Interactor[int, GetUserDevicesResultDto]):
         if not subscription:
             raise ValueError(f"Subscription for '{user_id}' not found")
 
-        devices = await self.remnawave.get_devices(subscription.user_remna_id, username=target_user.remna_name)
+        devices = await self.remnawave.get_devices(
+            subscription.user_remna_id, username=target_user.remna_name
+        )
 
         logger.info(f"{actor.log} Retrieved '{len(devices)}' devices for user '{user_id}'")
 

@@ -244,7 +244,9 @@ class RemnawaveImpl(Remnawave):
         logger.info(f"Remnawave user '{uuid}' deleted")
         return True
 
-    async def get_user_by_uuid(self, uuid: UUID, *, username: Optional[str] = None) -> Optional[RemnawaveUser]:
+    async def get_user_by_uuid(
+        self, uuid: UUID, *, username: Optional[str] = None
+    ) -> Optional[RemnawaveUser]:
         try:
             user_id = await self._resolve_user_id(uuid, username=username)
             return self._remember(await self.sdk.users.get_user_by_id(user_id))
@@ -296,12 +298,16 @@ class RemnawaveImpl(Remnawave):
                 return users
             cursor = next_cursor
 
-    async def get_devices(self, user_uuid: UUID, *, username: Optional[str] = None) -> list[HwidDeviceDto]:
+    async def get_devices(
+        self, user_uuid: UUID, *, username: Optional[str] = None
+    ) -> list[HwidDeviceDto]:
         user_id = await self._resolve_user_id(user_uuid, username=username)
         response = await self.sdk.hwid.get_hwid_user(user_id)
         return response.devices if response.total else []
 
-    async def delete_device(self, user_uuid: UUID, hwid_uuid: str, *, username: Optional[str] = None) -> Optional[int]:
+    async def delete_device(
+        self, user_uuid: UUID, hwid_uuid: str, *, username: Optional[str] = None
+    ) -> Optional[int]:
         try:
             user_id = await self._resolve_user_id(user_uuid, username=username)
             response = await self.sdk.hwid.delete_hwid_to_user(
@@ -341,7 +347,9 @@ class RemnawaveImpl(Remnawave):
         except Exception as error:
             logger.warning(f"Failed to drop connections for Remnawave user '{user_uuid}': {error}")
 
-    async def reset_traffic(self, uuid: UUID, *, username: Optional[str] = None) -> Optional[RemnawaveUser]:
+    async def reset_traffic(
+        self, uuid: UUID, *, username: Optional[str] = None
+    ) -> Optional[RemnawaveUser]:
         try:
             user_id = await self._resolve_user_id(uuid, username=username)
             payload = await self.sdk.users.reset_user_traffic(user_id)
