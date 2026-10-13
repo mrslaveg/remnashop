@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional, Self
 from uuid import UUID
 
-from remnapy.enums.users import TrafficLimitStrategy
+from remnawave.enums import TrafficLimitStrategy
 
 from src.core.enums import Currency, PlanAvailability, PlanType
 from src.core.exceptions import PriceNotFoundError
