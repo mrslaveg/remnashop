@@ -4,8 +4,6 @@ from uuid import UUID
 from packaging.version import Version
 from remnawave.models.hwid import HwidDeviceDto
 
-from src.core.types import RemnaUserView
-
 from src.application.dto import (
     PlanSnapshotDto,
     RemnaSubscriptionDto,
@@ -13,6 +11,7 @@ from src.application.dto import (
     SubscriptionDto,
     UserDto,
 )
+from src.core.types import RemnaUserView
 
 T = TypeVar("T", SubscriptionDto, RemnaSubscriptionDto)
 
