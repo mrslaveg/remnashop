@@ -203,13 +203,9 @@ class RemnawaveImpl(Remnawave):
             raise
 
     async def get_users_by_telegram_id(self, telegram_id: int) -> list[RemnawaveUser]:
-        matches = [
-            user
-            for user in await self._fetch_users()
-            if user.telegram_id == telegram_id
-        ]
-        logger.debug(f"Fetched {len(matches)} Remnawave users for telegram_id '{telegram_id}'")
-        return matches
+        users = await self._stream_users(telegram_id=str(telegram_id))
+        logger.debug(f"Fetched {len(users)} Remnawave users for telegram_id '{telegram_id}'")
+        return users
 
     async def get_all_users(self, limit: int, offset: int) -> list[RemnawaveUser]:
         response = await self.sdk.users.get_all_users(start=offset, size=limit)
@@ -218,21 +214,35 @@ class RemnawaveImpl(Remnawave):
         return users
 
     async def get_users_by_email(self, email: str) -> list[RemnawaveUser]:
-        matches = [user for user in await self._fetch_users() if user.email == email]
-        logger.debug(f"Fetched {len(matches)} Remnawave users for email '{email}'")
-        return matches
+        users = await self._stream_users(email=email)
+        logger.debug(f"Fetched {len(users)} Remnawave users for email '{email}'")
+        return users
 
-    async def _fetch_users(self) -> list[RemnawaveUser]:
+    async def _stream_users(
+        self,
+        *,
+        telegram_id: Optional[str] = None,
+        email: Optional[str] = None,
+        tag: Optional[str] = None,
+    ) -> list[RemnawaveUser]:
+        """Fetch users via cursor-based stream with optional filters (Remnawave 3.x)."""
         users: list[RemnawaveUser] = []
-        offset = 0
+        cursor: Optional[int] = None
         page_size = 1000
         while True:
-            response = await self.sdk.users.get_all_users(start=offset, size=page_size)
+            response = await self.sdk.users.get_users_stream(
+                size=page_size,
+                cursor=cursor,
+                telegram_id=telegram_id,
+                email=email,
+                tag=tag,
+            )
             batch = [self._remember(payload) for payload in response.users]
             users.extend(batch)
-            if len(batch) < page_size:
+            next_cursor = getattr(response, "next_cursor", None)
+            if next_cursor is None or not batch:
                 return users
-            offset += len(batch)
+            cursor = next_cursor
 
     async def get_devices(self, user_uuid: UUID) -> list[HwidDeviceDto]:
         user_id = await self._resolve_user_id(user_uuid)
