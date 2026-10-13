@@ -2,8 +2,9 @@ from typing import List, Optional, Protocol, TypeVar, Union
 from uuid import UUID
 
 from packaging.version import Version
-from remnawave.models import UserResponseDto
 from remnawave.models.hwid import HwidDeviceDto
+
+from src.core.types import RemnaUserView
 
 from src.application.dto import (
     PlanSnapshotDto,
@@ -24,7 +25,7 @@ class Remnawave(Protocol):
         user: UserDto,
         plan: Optional[PlanSnapshotDto] = None,
         subscription: Optional[SubscriptionDto] = None,
-    ) -> UserResponseDto: ...
+    ) -> RemnaUserView: ...
 
     async def update_user(
         self,
@@ -41,9 +42,9 @@ class Remnawave(Protocol):
 
     async def delete_user(self, uuid: UUID) -> bool: ...
 
-    async def get_user_by_uuid(self, uuid: UUID) -> Optional[UserResponseDto]: ...
+    async def get_user_by_uuid(self, uuid: UUID) -> Optional[RemnaUserView]: ...
 
-    async def get_users_by_telegram_id(self, telegram_id: int) -> List[UserResponseDto]: ...
+    async def get_users_by_telegram_id(self, telegram_id: int) -> List[RemnaUserView]: ...
 
     async def get_users_by_email(self, email: str) -> List[UserResponseDto]: ...
 
