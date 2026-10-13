@@ -34,40 +34,7 @@ from src.core.constants import REMNAWAVE_MIN_VERSION
 from src.core.enums import SubscriptionStatus
 from src.core.utils.converters import days_to_datetime, gb_to_bytes
 from src.core.utils.time import datetime_now
-
-
-class RemnawaveUser:
-    """Small compatibility view over v3 user models.
-
-    Remnawave v3 identifies records with an integer id. Remnashop keeps the
-    VLESS UUID as its durable subscription key, so expose that value through
-    the old `uuid` attribute while the adapter resolves the numeric id for
-    operations that require it.
-    """
-
-    def __init__(self, payload: Any) -> None:
-        self._payload = payload
-
-    def __getattr__(self, name: str) -> Any:
-        if name == "uuid":
-            return getattr(self._payload, "vless_uuid", None) or getattr(
-                self._payload, "uuid", None
-            )
-        if name == "url":
-            return getattr(self._payload, "subscription_url", None)
-        if name == "first_connected_at":
-            return getattr(
-                self._payload,
-                "first_connected_at",
-                getattr(self._payload, "first_connected", None),
-            )
-        if name == "last_connected_node_uuid":
-            return getattr(
-                self._payload,
-                "last_connected_node_uuid",
-                getattr(self._payload, "last_connected_node_uuid", None),
-            )
-        return getattr(self._payload, name)
+from src.core.types import RemnaUserView as RemnawaveUser
 
 
 class RemnawaveImpl(Remnawave):
