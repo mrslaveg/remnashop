@@ -17,14 +17,12 @@ from src.application.events import (
     BotShutdownEvent,
     BotStartupEvent,
     RemnawaveErrorEvent,
-    RemnawaveVersionWarningEvent,
     WebhookErrorEvent,
 )
 from src.application.events.system import RemnashopWelcomeEvent
 from src.application.use_cases.gateways.commands.payment import CreateDefaultPaymentGateway
 from src.application.use_cases.settings.commands.defaults import CreateDefaultSettings
 from src.core.config import AppConfig
-from src.core.constants import REMNAWAVE_MAX_VERSION
 from src.core.utils.i18n_helpers import i18n_format_seconds
 from src.core.utils.time import get_uptime
 from src.infrastructure.redis.keys import WelcomedVersionKey
@@ -134,14 +132,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await event_bus.publish(bot_startup_event)
 
     try:
-        panel_version = await remnawave_service.try_connection()
-        if panel_version >= REMNAWAVE_MAX_VERSION:
-            await event_bus.publish(
-                RemnawaveVersionWarningEvent(
-                    **config.build.data,
-                    panel_version=str(panel_version),
-                )
-            )
+        await remnawave_service.try_connection()
     except Exception as e:
         remnawave_error_event = RemnawaveErrorEvent(**config.build.data, exception=e)
         await event_bus.publish(remnawave_error_event)
