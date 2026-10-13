@@ -92,7 +92,7 @@ class DeleteSubscription(Interactor[int, None]):
             try:
                 await self.remnawave.delete_user(subscription.user_remna_id)
             except Exception as e:
-                logger.error(f"Failed to delete user {target_user.log} from remnapy: {e}")
+                logger.error(f"Failed to delete user {target_user.log} from Remnawave: {e}")
                 raise
 
             await self.user_dao.clear_current_subscription(target_user.id)
