@@ -2,7 +2,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional
 
-from remnapy.enums.users import TrafficLimitStrategy
+from remnawave.enums import TrafficLimitStrategy
 
 from src.core.constants import TIMEZONE
 
