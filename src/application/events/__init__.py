@@ -12,7 +12,6 @@ from .system import (
     NodeTrafficReachedEvent,
     NotificationErrorEvent,
     RemnawaveErrorEvent,
-    RemnawaveVersionWarningEvent,
     TorrentBlockerReportEvent,
     TrialActivatedEvent,
     UserDeviceAddedEvent,
@@ -43,7 +42,6 @@ __all__ = [
     "WebhookErrorEvent",
     "BotInlineModeDisabledEvent",
     "RemnawaveErrorEvent",
-    "RemnawaveVersionWarningEvent",
     #
     "BotShutdownEvent",
     "BotStartupEvent",
