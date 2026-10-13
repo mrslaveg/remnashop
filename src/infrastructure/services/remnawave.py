@@ -40,6 +40,7 @@ class RemnawaveImpl(Remnawave):
     def __init__(self, sdk: RemnawaveSDK) -> None:
         self.sdk = sdk
         self._user_ids: dict[UUID, int] = {}
+        self._user_ids_loaded = False
 
     @staticmethod
     def _not_found(error: Exception) -> bool:
@@ -65,28 +66,36 @@ class RemnawaveImpl(Remnawave):
         self._user_ids[key] = numeric_id
         return user
 
-    async def _resolve_user_id(self, user_uuid: UUID) -> int:
-        key = UUID(str(user_uuid))
-        cached = self._user_ids.get(key)
-        if cached is not None:
-            return cached
+    async def _load_user_id_cache(self) -> None:
+        if self._user_ids_loaded:
+            return
 
-        # The v3 API does not provide lookup-by-vlessUuid. Resolve it through
-        # the paginated user collection and cache the numeric ID for later calls.
         offset = 0
         page_size = 1000
         while True:
             response = await self.sdk.users.get_all_users(start=offset, size=page_size)
             users = response.users
             for payload in users:
-                user = self._remember(payload)
-                if user.uuid == key:
-                    return int(user.id)
+                self._remember(payload)
             if len(users) < page_size:
                 break
             offset += len(users)
 
-        raise LookupError(f"Remnawave user with VLESS UUID '{key}' was not found")
+        self._user_ids_loaded = True
+
+    async def _resolve_user_id(self, user_uuid: UUID) -> int:
+        key = UUID(str(user_uuid))
+        cached = self._user_ids.get(key)
+        if cached is not None:
+            return cached
+
+        # V3 actions use numeric IDs, while Remnashop stores the VLESS UUID.
+        # Build the cache once instead of scanning the whole panel per user.
+        await self._load_user_id_cache()
+        cached = self._user_ids.get(key)
+        if cached is None:
+            raise LookupError(f"Remnawave user with VLESS UUID '{key}' was not found")
+        return cached
 
     async def try_connection(self) -> Version:
         for attempt in range(1, 4):
