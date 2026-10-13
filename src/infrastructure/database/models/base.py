@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from remnapy.enums.users import TrafficLimitStrategy
+from remnawave.enums import TrafficLimitStrategy
 from sqlalchemy import ARRAY, DateTime, Enum, Integer
 from sqlalchemy import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import JSONB
