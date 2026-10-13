@@ -31,7 +31,7 @@ from src.application.use_cases.remnawave.commands.synchronization import (
 from src.core.config import AppConfig
 from src.core.constants import DATETIME_VIEW_FORMAT, IMPORTED_TAG, T_ME, TIME_1H
 from src.core.enums import SubscriptionStatus
-from src.core.types import RemnaUserDto, RemnaUserView
+from src.core.types import RemnaUserDto
 from src.core.utils.converters import country_code_to_flag
 from src.core.utils.i18n_helpers import (
     i18n_format_bytes_to_unit,
