@@ -49,6 +49,16 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
             if not user and remna_user.telegram_id:
                 user = await self.user_dao.get_by_telegram_id(remna_user.telegram_id)
 
+            # On Remnawave v3 the old panel UUID is no longer exposed. During the
+            # first sync, match existing records by their stable subscription URL
+            # before creating a duplicate local user.
+            if not user and remna_user.subscription_url:
+                existing_subscription = await self.subscription_dao.get_by_url(
+                    remna_user.subscription_url
+                )
+                if existing_subscription:
+                    user = await self.user_dao.get_by_id(existing_subscription.user_id)
+
             if not user and data.creating:
                 logger.debug(f"User '{remna_user.uuid}' not found in bot, creating new user")
 
@@ -274,7 +284,13 @@ class SyncAllUsersFromPanel(Interactor[None, dict[str, int]]):
                 if remna_user.telegram_id:
                     user = bot_users_map.get(remna_user.telegram_id)
                 else:
-                    user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
+                    existing_subscription = await self.subscription_dao.get_by_url(
+                        remna_user.subscription_url
+                    )
+                    if existing_subscription:
+                        user = await self.user_dao.get_by_id(existing_subscription.user_id)
+                    else:
+                        user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
 
                 if not user:
                     await self.sync_remna_user.system(SyncRemnaUserDto(remna_user, True))
