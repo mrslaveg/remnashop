@@ -7,7 +7,6 @@ from loguru import logger
 from remnawave.controllers import WebhookUtility
 from remnawave.models.webhook import (
     NodeDto,
-    TorrentBlockerReportDto,
     UserDto,
     UserHwidDeviceEventDto,
 )
