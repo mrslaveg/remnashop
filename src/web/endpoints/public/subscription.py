@@ -3,7 +3,7 @@ from typing import Optional
 from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException, status
-from remnapy.models.hwid import HwidDeviceDto
+from remnawave.models.hwid import HwidDeviceDto
 
 from src.application.common import Remnawave
 from src.application.common.dao import (
