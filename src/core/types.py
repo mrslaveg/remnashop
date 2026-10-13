@@ -29,6 +29,7 @@ AnyKeyboard: TypeAlias = Union[
 
 NotificationType: TypeAlias = Union[SystemNotificationType, UserNotificationType]
 
+
 class RemnaUserView:
     """Normalize Remnawave v3 API and webhook users for Remnashop's domain layer."""
 
@@ -37,7 +38,10 @@ class RemnaUserView:
 
     def __getattr__(self, name: str) -> Any:
         if name == "uuid":
-            return getattr(self._payload, "vless_uuid", None) or getattr(self._payload, "uuid", None)
+            return (
+                getattr(self._payload, "vless_uuid", None)
+                or getattr(self._payload, "uuid", None)
+            )
         if name == "url":
             return getattr(self._payload, "subscription_url", None)
         if name == "first_connected_at":
