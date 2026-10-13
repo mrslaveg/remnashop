@@ -2,8 +2,8 @@ from typing import List, Optional, Protocol, TypeVar, Union
 from uuid import UUID
 
 from packaging.version import Version
-from remnapy.models import UserResponseDto
-from remnapy.models.hwid import HwidDeviceDto
+from remnawave.models import UserResponseDto
+from remnawave.models.hwid import HwidDeviceDto
 
 from src.application.dto import (
     PlanSnapshotDto,
