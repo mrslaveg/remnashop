@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from remnapy.enums.users import TrafficLimitStrategy
+from remnawave.enums import TrafficLimitStrategy
 from sqlalchemy import ARRAY, BigInteger, ForeignKey, Numeric, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
