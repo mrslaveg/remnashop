@@ -32,6 +32,34 @@ jobs:
           src/application/use_cases/subscription/commands/management.py
           src/telegram/routers/dashboard/remnawave/getters.py
           tests/test_remnawave_v3_adapter.py
+          src/application/use_cases/user/queries/profile.py
+          src/web/endpoints/public/subscription.py
+          src/infrastructure/taskiq/tasks/importer.py
+          src/infrastructure/database/models/base.py
+          src/infrastructure/database/models/plan.py
+          src/telegram/routers/dashboard/users/user/getters.py
+          src/telegram/routers/dashboard/importer/getters.py
+          src/telegram/routers/dashboard/importer/handlers.py
+          src/telegram/routers/dashboard/remnashop/plans/getters.py
+          src/telegram/routers/dashboard/remnashop/plans/handlers.py
+          src/telegram/routers/dashboard/remnashop/plans/dialog.py
+          src/core/utils/time.py
+          src/application/events/user.py
+          src/application/use_cases/remnawave/commands/synchronization.py
+          src/application/common/dao/subscription.py
+          src/infrastructure/database/dao/subscription.py
+          src/lifespan.py
+          src/application/events/system.py
+          src/application/events/__init__.py
+          src/core/constants.py
+      - name: Compile application sources
+        run: uv run python -m compileall -q src
+      - name: Verify new SDK imports
+        run: >-
+          uv run python -c
+          "from remnawave.models import CreateUserBodyDto, GetExternalSquadByUuidResponseDto;
+          from remnawave.models.hwid import HwidDeviceDto;
+          from remnawave.controllers import WebhookUtility"
       - name: Ensure legacy SDK imports are removed
         run: '! grep -RInE "^[[:space:]]*(from|import)[[:space:]]+remnapy" src'
       - name: Run tests
