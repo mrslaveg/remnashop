@@ -31,9 +31,9 @@ from src.application.dto import (
 )
 from src.core.constants import REMNAWAVE_MIN_VERSION
 from src.core.enums import SubscriptionStatus
+from src.core.types import RemnaUserView as RemnawaveUser
 from src.core.utils.converters import days_to_datetime, gb_to_bytes
 from src.core.utils.time import datetime_now
-from src.core.types import RemnaUserView as RemnawaveUser
 
 
 class RemnawaveImpl(Remnawave):
