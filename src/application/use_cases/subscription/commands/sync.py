@@ -111,7 +111,7 @@ class SyncSubscriptionFromRemnawave(Interactor[int, None]):
             else:
                 await self.sync_remna_user.system(SyncRemnaUserDto(remna_user, creating=False))
                 logger.info(
-                    f"{actor.log} Synchronized subscription from remnapy for user '{user_id}'"
+                    f"{actor.log} Synchronized subscription from Remnawave for user '{user_id}'"
                 )
 
             await self.uow.commit()
@@ -150,7 +150,7 @@ class SyncSubscriptionFromRemnashop(Interactor[int, None]):
                     if remna_users:
                         await self.remnawave.delete_user(remna_users[0].uuid)
                         logger.info(
-                            f"{actor.log} Deleted user '{remna_users[0].uuid}' from remnapy "
+                            f"{actor.log} Deleted user '{remna_users[0].uuid}' from Remnawave "
                             f"due to missing local subscription"
                         )
             else:
