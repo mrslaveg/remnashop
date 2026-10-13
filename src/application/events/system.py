@@ -7,7 +7,7 @@ from aiogram.utils.formatting import Text
 
 from src.__version__ import __version__
 from src.application.dto import BuildInfoDto, MediaDescriptorDto, MessagePayloadDto
-from src.core.constants import REMNAWAVE_MAX_VERSION, REPOSITORY
+from src.core.constants import REPOSITORY
 from src.core.enums import (
     AccessMode,
     MediaType,
@@ -94,29 +94,6 @@ class RemnawaveErrorEvent(ErrorEvent):
     @property
     def event_key(self) -> str:
         return "event-error.remnawave"
-
-
-@dataclass(frozen=True, kw_only=True)
-class RemnawaveVersionWarningEvent(SystemEvent, BuildInfoDto):
-    notification_type: NotificationType = field(
-        default=SystemNotificationType.SYSTEM,
-        init=False,
-    )
-
-    panel_version: str
-    max_version: str = str(REMNAWAVE_MAX_VERSION)
-
-    @property
-    def event_key(self) -> str:
-        return "event-error.remnawave-version"
-
-    def as_payload(self) -> "MessagePayloadDto":
-        return MessagePayloadDto(
-            i18n_key=self.event_key,
-            i18n_kwargs={**asdict(self)},
-            disable_default_markup=False,
-            delete_after=None,
-        )
 
 
 @dataclass(frozen=True, kw_only=True)
