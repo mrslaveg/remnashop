@@ -3,7 +3,7 @@ from typing import Any
 from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
-from remnapy import RemnawaveSDK
+from remnawave import RemnawaveSDK
 
 
 async def from_xui_getter(
