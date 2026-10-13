@@ -4,8 +4,8 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from loguru import logger
-from remnapy.controllers import WebhookUtility
-from remnapy.models.webhook import (
+from remnawave.controllers import WebhookUtility
+from remnawave.models.webhook import (
     NodeDto,
     TorrentBlockerReportDto,
     UserDto,
@@ -17,6 +17,7 @@ from src.application.events import ErrorEvent
 from src.application.services import RemnaWebhookService
 from src.core.config import AppConfig
 from src.core.constants import API_V1, REMNAWAVE_WEBHOOK_PATH
+from src.core.types import RemnaUserView
 
 router = APIRouter(prefix=API_V1, include_in_schema=False)
 
@@ -47,13 +48,13 @@ async def _process_remnawave_webhook(
     try:
         if WebhookUtility.is_user_event(payload.event):
             user = cast(UserDto, WebhookUtility.get_typed_data(payload))
-            await remna_webhook_service.handle_user_event(payload.event, user)
+            await remna_webhook_service.handle_user_event(payload.event, RemnaUserView(user))
 
         elif WebhookUtility.is_user_hwid_devices_event(payload.event):
             event = cast(UserHwidDeviceEventDto, WebhookUtility.get_typed_data(payload))
             await remna_webhook_service.handle_device_event(
                 payload.event,
-                event.user,
+                RemnaUserView(event.user),
                 event.hwid_user_device,
             )
 
@@ -61,9 +62,13 @@ async def _process_remnawave_webhook(
             node = cast(NodeDto, WebhookUtility.get_typed_data(payload))
             await remna_webhook_service.handle_node_event(payload.event, node)
 
-        elif WebhookUtility.is_torrent_blocker_event(payload.event):
-            report = cast(TorrentBlockerReportDto, WebhookUtility.get_typed_data(payload))
-            await remna_webhook_service.handle_torrent_blocker_event(report)
+        elif payload.event.startswith("torrent_blocker."):
+            # The v3 SDK's webhook schema no longer matches the legacy report DTO.
+            # Do not feed an incompatible payload into the legacy notification handler.
+            logger.warning(
+                "Ignoring unsupported Remnawave v3 torrent-blocker payload; "
+                "its report schema needs a dedicated v3 adapter"
+            )
 
         else:
             logger.warning(f"Unhandled Remnawave event type '{payload.event}'")
