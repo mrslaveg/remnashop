@@ -33,6 +33,6 @@ jobs:
           src/telegram/routers/dashboard/remnawave/getters.py
           tests/test_remnawave_v3_adapter.py
       - name: Ensure legacy SDK imports are removed
-        run: '! grep -RInE "(^|[[:space:]])(from|import) remnapy" src'
+        run: '! grep -RInE "^[[:space:]]*(from|import)[[:space:]]+remnapy" src'
       - name: Run tests
         run: uv run pytest -q
