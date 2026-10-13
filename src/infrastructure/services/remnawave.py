@@ -17,7 +17,6 @@ from remnawave.models import (
     GetMetadataResponseDto,
     TargetAllNodes,
     UpdateUserBodyDto,
-    UserResponseDto,
 )
 from remnawave.models.hwid import HwidDeviceDto
 
