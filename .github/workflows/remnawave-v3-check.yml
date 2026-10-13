@@ -1,0 +1,34 @@
+name: Remnawave v3 migration checks
+
+on:
+  push:
+    branches:
+      - feat/remnawave-v3
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Resolve dependencies
+        run: uv sync --dev
+      - name: Lint migrated files
+        run: >-
+          uv run ruff check
+          src/infrastructure/services/remnawave.py
+          src/application/common/remnawave.py
+          src/core/types.py
+          src/web/endpoints/remnawave.py
+          src/application/services/remnawave.py
+          src/application/use_cases/subscription/commands/management.py
+          src/telegram/routers/dashboard/remnawave/getters.py
+          tests/test_remnawave_v3_adapter.py
+      - name: Run tests
+        run: uv run pytest -q
