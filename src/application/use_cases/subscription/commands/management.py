@@ -48,12 +48,14 @@ class ToggleSubscriptionStatus(Interactor[int, SubscriptionStatus]):
             try:
                 if is_now_active:
                     await self.remnawave.enable_user(
-                    subscription.user_remna_id, username=user.remna_name
-                )
+                        subscription.user_remna_id,
+                        username=target_user.remna_name,
+                    )
                 else:
                     await self.remnawave.disable_user(
-                    subscription.user_remna_id, username=user.remna_name
-                )
+                        subscription.user_remna_id,
+                        username=target_user.remna_name,
+                    )
             except Exception as e:
                 logger.error(f"External API error for user '{user_id}' while toggling status: {e}")
                 raise
@@ -94,7 +96,10 @@ class DeleteSubscription(Interactor[int, None]):
 
         async with self.uow:
             try:
-                await self.remnawave.delete_user(subscription.user_remna_id, username=target_user.remna_name)
+                await self.remnawave.delete_user(
+                    subscription.user_remna_id,
+                    username=target_user.remna_name,
+                )
             except Exception as e:
                 logger.error(f"Failed to delete user {target_user.log} from Remnawave: {e}")
                 raise

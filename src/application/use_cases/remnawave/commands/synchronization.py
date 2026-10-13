@@ -195,7 +195,10 @@ class SyncAllUsersFromBot(Interactor[None, dict[str, int]]):
                     skipped += 1
                     continue
 
-                remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id, username=user.remna_name)
+                remna_user = await self.remnawave.get_user_by_uuid(
+                    subscription.user_remna_id,
+                    username=user.remna_name,
+                )
 
                 if remna_user:
                     updated_user = await self.remnawave.update_user(
