@@ -29,9 +29,6 @@ AnyKeyboard: TypeAlias = Union[
 
 NotificationType: TypeAlias = Union[SystemNotificationType, UserNotificationType]
 
-RemnaUserDto: TypeAlias = Union[UserWebhookDto, UserResponseDto]
-
-
 class RemnaUserView:
     """Normalize Remnawave v3 API and webhook users for Remnashop's domain layer."""
 
@@ -50,6 +47,9 @@ class RemnaUserView:
                 getattr(self._payload, "first_connected", None),
             )
         return getattr(self._payload, name)
+
+
+RemnaUserDto: TypeAlias = Union[UserWebhookDto, UserResponseDto, RemnaUserView]
 
 StringList: TypeAlias = Annotated[
     ListStr, PlainValidator(lambda x: [s.strip() for s in x.split(",")])
