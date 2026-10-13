@@ -156,7 +156,7 @@ async def devices_getter(
     if not current_subscription:
         raise ValueError(f"Current subscription for user '{user.telegram_id}' not found")
 
-    devices = await remnawave.get_devices(current_subscription.user_remna_id)
+    devices = await remnawave.get_devices(current_subscription.user_remna_id, username=user.remna_name)
 
     formatted_devices = [
         {

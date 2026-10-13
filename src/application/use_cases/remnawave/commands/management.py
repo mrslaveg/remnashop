@@ -64,8 +64,11 @@ class DeleteUserDevice(Interactor[DeleteUserDeviceDto, bool]):
             remaining_devices = await self.remnawave.delete_device(
                 current_subscription.user_remna_id,
                 data.hwid,
+                username=actor.remna_name,
             )
-            await self.remnawave.drop_connections(current_subscription.user_remna_id)
+            await self.remnawave.drop_connections(
+                current_subscription.user_remna_id, username=actor.remna_name
+            )
             current_subscription.device_single_reset_at = datetime_now()
             await self.subscription_dao.update(current_subscription)
             await self.uow.commit()
@@ -110,8 +113,8 @@ class DeleteUserAllDevices(Interactor[None, None]):
                 raise CooldownError(available_at)
 
         async with self.uow:
-            await self.remnawave.delete_all_devices(current_subscription.user_remna_id)
-            await self.remnawave.drop_connections(current_subscription.user_remna_id)
+            await self.remnawave.delete_all_devices(current_subscription.user_remna_id, username=actor.remna_name)
+            await self.remnawave.drop_connections(current_subscription.user_remna_id, username=actor.remna_name)
             current_subscription.device_all_reset_at = datetime_now()
             await self.subscription_dao.update(current_subscription)
             await self.uow.commit()
@@ -142,7 +145,7 @@ class ResetUserTraffic(Interactor[int, None]):
             raise ValueError(f"Subscription for user '{target_user.remna_name}' not found")
 
         try:
-            await self.remnawave.reset_traffic(subscription.user_remna_id)
+            await self.remnawave.reset_traffic(subscription.user_remna_id, username=target_user.remna_name)
         except Exception as e:
             logger.error(
                 f"Failed to reset traffic in Remnawave for user '{target_user.remna_name}': {e}"
@@ -186,7 +189,7 @@ class ReissueSubscription(Interactor[None, None]):
                 raise CooldownError(available_at)
 
         async with self.uow:
-            await self.remnawave.revoke_subscription(current_subscription.user_remna_id)
+            await self.remnawave.revoke_subscription(current_subscription.user_remna_id, username=actor.remna_name)
             current_subscription.link_reset_at = datetime_now()
             await self.subscription_dao.update(current_subscription)
             await self.uow.commit()
@@ -214,6 +217,6 @@ class ReissueUserSubscription(Interactor[int, None]):
         if not current_subscription:
             raise ValueError(f"No active subscription for user '{target_user.remna_name}'")
 
-        await self.remnawave.revoke_subscription(current_subscription.user_remna_id)
+        await self.remnawave.revoke_subscription(current_subscription.user_remna_id, username=target_user.remna_name)
 
         logger.info(f"{actor.log} Reissued subscription for user '{target_user.id}'")

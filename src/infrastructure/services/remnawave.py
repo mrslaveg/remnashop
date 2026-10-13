@@ -39,7 +39,10 @@ from src.core.utils.time import datetime_now
 class RemnawaveImpl(Remnawave):
     def __init__(self, sdk: RemnawaveSDK) -> None:
         self.sdk = sdk
+        # VLESS UUID -> numeric panel id
         self._user_ids: dict[UUID, int] = {}
+        # username -> numeric panel id (fast path, one API call)
+        self._username_ids: dict[str, int] = {}
         self._user_ids_loaded = False
 
     @staticmethod
@@ -59,42 +62,85 @@ class RemnawaveImpl(Remnawave):
     def _remember(self, payload: Any) -> RemnawaveUser:
         user = RemnawaveUser(payload)
         try:
-            key = UUID(str(user.uuid))
             numeric_id = int(user.id)
         except (AttributeError, TypeError, ValueError):
             return user
-        self._user_ids[key] = numeric_id
+
+        try:
+            key = UUID(str(user.uuid))
+            self._user_ids[key] = numeric_id
+        except (AttributeError, TypeError, ValueError):
+            pass
+
+        username = getattr(user, "username", None) or getattr(payload, "username", None)
+        if username:
+            self._username_ids[str(username)] = numeric_id
+
         return user
+
+    async def _resolve_by_username(self, username: str) -> Optional[int]:
+        cached = self._username_ids.get(username)
+        if cached is not None:
+            return cached
+        try:
+            payload = await self.sdk.users.get_user_by_username(username)
+        except Exception as error:
+            if self._not_found(error):
+                return None
+            raise
+        self._remember(payload)
+        return self._username_ids.get(username)
 
     async def _load_user_id_cache(self) -> None:
         if self._user_ids_loaded:
             return
 
-        offset = 0
+        # Prefer cursor stream (same contract as filtered lookups) over offset pages.
+        cursor: Optional[int] = None
         page_size = 1000
         while True:
-            response = await self.sdk.users.get_all_users(start=offset, size=page_size)
-            users = response.users
-            for payload in users:
+            response = await self.sdk.users.get_users_stream(size=page_size, cursor=cursor)
+            for payload in response.users:
                 self._remember(payload)
-            if len(users) < page_size:
+            next_cursor = getattr(response, "next_cursor", None)
+            if next_cursor is None or not response.users:
                 break
-            offset += len(users)
+            cursor = next_cursor
 
         self._user_ids_loaded = True
+        logger.debug(
+            f"Remnawave id cache loaded: {len(self._user_ids)} by vless uuid, "
+            f"{len(self._username_ids)} by username"
+        )
 
-    async def _resolve_user_id(self, user_uuid: UUID) -> int:
+    async def _resolve_user_id(
+        self,
+        user_uuid: UUID,
+        *,
+        username: Optional[str] = None,
+    ) -> int:
         key = UUID(str(user_uuid))
         cached = self._user_ids.get(key)
         if cached is not None:
             return cached
 
-        # V3 actions use numeric IDs, while Remnashop stores the VLESS UUID.
-        # Build the cache once instead of scanning the whole panel per user.
+        # Fast path: panel still supports lookup by username (rs_<telegram_id>).
+        if username:
+            by_name = await self._resolve_by_username(username)
+            if by_name is not None:
+                # Link VLESS uuid from the remembered user when available.
+                self._user_ids.setdefault(key, by_name)
+                return by_name
+
+        # Last resort: one full stream pass, then cache for the process lifetime.
         await self._load_user_id_cache()
         cached = self._user_ids.get(key)
+        if cached is None and username:
+            cached = self._username_ids.get(username)
         if cached is None:
-            raise LookupError(f"Remnawave user with VLESS UUID '{key}' was not found")
+            raise LookupError(
+                f"Remnawave user not found (vless_uuid={key}, username={username!r})"
+            )
         return cached
 
     async def try_connection(self) -> Version:
@@ -166,22 +212,22 @@ class RemnawaveImpl(Remnawave):
 
         updated = self._remember(payload)
         if reset_traffic:
-            await self.reset_traffic(uuid)
+            await self.reset_traffic(uuid, username=user.remna_name)
         return updated
 
-    async def enable_user(self, uuid: UUID) -> None:
-        user_id = await self._resolve_user_id(uuid)
+    async def enable_user(self, uuid: UUID, *, username: Optional[str] = None) -> None:
+        user_id = await self._resolve_user_id(uuid, username=username)
         await self.sdk.users.enable_user(user_id)
         logger.info(f"Remnawave user '{uuid}' enabled")
 
-    async def disable_user(self, uuid: UUID) -> None:
-        user_id = await self._resolve_user_id(uuid)
+    async def disable_user(self, uuid: UUID, *, username: Optional[str] = None) -> None:
+        user_id = await self._resolve_user_id(uuid, username=username)
         await self.sdk.users.disable_user(user_id)
         logger.info(f"Remnawave user '{uuid}' disabled")
 
-    async def delete_user(self, uuid: UUID) -> bool:
+    async def delete_user(self, uuid: UUID, *, username: Optional[str] = None) -> bool:
         try:
-            user_id = await self._resolve_user_id(uuid)
+            user_id = await self._resolve_user_id(uuid, username=username)
             await self.sdk.users.delete_user(user_id)
         except Exception as error:
             if self._not_found(error) or isinstance(error, LookupError):
@@ -189,12 +235,18 @@ class RemnawaveImpl(Remnawave):
                 return False
             raise
         self._user_ids.pop(UUID(str(uuid)), None)
+        if username:
+            self._username_ids.pop(username, None)
+        else:
+            for name, numeric_id in list(self._username_ids.items()):
+                if numeric_id == user_id:
+                    self._username_ids.pop(name, None)
         logger.info(f"Remnawave user '{uuid}' deleted")
         return True
 
-    async def get_user_by_uuid(self, uuid: UUID) -> Optional[RemnawaveUser]:
+    async def get_user_by_uuid(self, uuid: UUID, *, username: Optional[str] = None) -> Optional[RemnawaveUser]:
         try:
-            user_id = await self._resolve_user_id(uuid)
+            user_id = await self._resolve_user_id(uuid, username=username)
             return self._remember(await self.sdk.users.get_user_by_id(user_id))
         except Exception as error:
             if self._not_found(error) or isinstance(error, LookupError):
@@ -244,14 +296,14 @@ class RemnawaveImpl(Remnawave):
                 return users
             cursor = next_cursor
 
-    async def get_devices(self, user_uuid: UUID) -> list[HwidDeviceDto]:
-        user_id = await self._resolve_user_id(user_uuid)
+    async def get_devices(self, user_uuid: UUID, *, username: Optional[str] = None) -> list[HwidDeviceDto]:
+        user_id = await self._resolve_user_id(user_uuid, username=username)
         response = await self.sdk.hwid.get_hwid_user(user_id)
         return response.devices if response.total else []
 
-    async def delete_device(self, user_uuid: UUID, hwid_uuid: str) -> Optional[int]:
+    async def delete_device(self, user_uuid: UUID, hwid_uuid: str, *, username: Optional[str] = None) -> Optional[int]:
         try:
-            user_id = await self._resolve_user_id(user_uuid)
+            user_id = await self._resolve_user_id(user_uuid, username=username)
             response = await self.sdk.hwid.delete_hwid_to_user(
                 DeleteUserHwidDeviceRequestDto(user_id=user_id, hwid=hwid_uuid)
             )
@@ -265,9 +317,9 @@ class RemnawaveImpl(Remnawave):
         )
         return int(response.total)
 
-    async def delete_all_devices(self, user_uuid: UUID) -> None:
+    async def delete_all_devices(self, user_uuid: UUID, *, username: Optional[str] = None) -> None:
         try:
-            user_id = await self._resolve_user_id(user_uuid)
+            user_id = await self._resolve_user_id(user_uuid, username=username)
             result = await self.sdk.hwid.delete_all_hwid_user(
                 DeleteUserAllHwidDeviceRequestDto(user_id=user_id)
             )
@@ -277,9 +329,9 @@ class RemnawaveImpl(Remnawave):
             raise
         logger.info(f"Deleted all HWID devices ({result.total}) for user '{user_uuid}'")
 
-    async def drop_connections(self, user_uuid: UUID) -> None:
+    async def drop_connections(self, user_uuid: UUID, *, username: Optional[str] = None) -> None:
         try:
-            user_id = await self._resolve_user_id(user_uuid)
+            user_id = await self._resolve_user_id(user_uuid, username=username)
             await self.sdk.connections.drop_connections(
                 DropConnectionsRequestDto(
                     drop_by=DropByUserUuids(user_ids=[user_id]),
@@ -289,9 +341,9 @@ class RemnawaveImpl(Remnawave):
         except Exception as error:
             logger.warning(f"Failed to drop connections for Remnawave user '{user_uuid}': {error}")
 
-    async def reset_traffic(self, uuid: UUID) -> Optional[RemnawaveUser]:
+    async def reset_traffic(self, uuid: UUID, *, username: Optional[str] = None) -> Optional[RemnawaveUser]:
         try:
-            user_id = await self._resolve_user_id(uuid)
+            user_id = await self._resolve_user_id(uuid, username=username)
             payload = await self.sdk.users.reset_user_traffic(user_id)
         except Exception as error:
             if self._not_found(error) or isinstance(error, LookupError):
@@ -300,9 +352,9 @@ class RemnawaveImpl(Remnawave):
             raise
         return self._remember(payload)
 
-    async def revoke_subscription(self, uuid: UUID) -> None:
+    async def revoke_subscription(self, uuid: UUID, *, username: Optional[str] = None) -> None:
         try:
-            user_id = await self._resolve_user_id(uuid)
+            user_id = await self._resolve_user_id(uuid, username=username)
             await self.sdk.users.revoke_user_subscription(user_id)
         except Exception as error:
             if self._not_found(error) or isinstance(error, LookupError):
@@ -395,7 +447,7 @@ class RemnawaveImpl(Remnawave):
         plan: Optional[PlanSnapshotDto],
         subscription: Optional[SubscriptionDto],
     ) -> UpdateUserBodyDto:
-        user_id = await self._resolve_user_id(uuid)
+        user_id = await self._resolve_user_id(uuid, username=user.remna_name)
         common = {
             "id": user_id,
             "telegram_id": user.telegram_id,
