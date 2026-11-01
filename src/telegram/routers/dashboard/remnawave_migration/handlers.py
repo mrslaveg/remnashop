@@ -87,7 +87,7 @@ def _is_clean(report: dict[str, Any]) -> bool:
     summary = report.get("summary", {})
     unresolved = sum(
         count for status, count in summary.items()
-        if status not in {"matched", "already_migrated"}
+        if status not in {"matched", "already_migrated", "skipped_by_admin"}
     )
     return (
         report.get("panel_api_line") in {"v2_legacy_uuid_lookup", "v3_users_stream"}
@@ -126,9 +126,10 @@ async def on_migration_check(
         }
         dialog_manager.dialog_data["migration_log"] = log
         dialog_manager.dialog_data["migration_issues"] = _format_issues(report)
+        dialog_manager.dialog_data["migration_full_matches"] = report.get("matches", [])
         dialog_manager.dialog_data["migration_issues_total"] = sum(
             count for status, count in report.get("summary", {}).items()
-            if status not in {"matched", "already_migrated"}
+            if status not in {"matched", "already_migrated", "skipped_by_admin"}
         )
         clean = code == 0 and _is_clean(report)
         dialog_manager.dialog_data["migration_can_apply"] = clean
