@@ -1562,6 +1562,9 @@ msg-remnawave-migration-main =
 
     <b>Статус</b>: { $result }
 
+    <b>Проблемные записи</b> ({ $issues_total }, первые 10):
+    <blockquote>{ $issues }</blockquote>
+
     <b>Лог последнего запуска</b>:
     <pre>{ $log }</pre>
 
