@@ -11,7 +11,7 @@ from loguru import logger
 from redis.asyncio import Redis
 
 from src.application.common import BotService, Remnawave
-from src.application.common.dao import SettingsDao
+from src.application.common.dao import SettingsDao, SubscriptionDao
 from src.application.events import (
     BotInlineModeDisabledEvent,
     BotShutdownEvent,
@@ -23,6 +23,7 @@ from src.application.events.system import RemnashopWelcomeEvent
 from src.application.use_cases.gateways.commands.payment import CreateDefaultPaymentGateway
 from src.application.use_cases.settings.commands.defaults import CreateDefaultSettings
 from src.core.config import AppConfig
+from src.core.exceptions import RemnawaveCompatibilityError
 from src.core.utils.i18n_helpers import i18n_format_seconds
 from src.core.utils.time import get_uptime
 from src.infrastructure.redis.keys import WelcomedVersionKey
@@ -55,6 +56,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         webhook_service = await startup_container.get(WebhookService)
         command_service = await startup_container.get(CommandService)
         remnawave_service = await startup_container.get(Remnawave)
+        subscription_dao = await startup_container.get(SubscriptionDao)
+
+        try:
+            panel_version = await remnawave_service.try_connection()
+        except RemnawaveCompatibilityError:
+            raise
+        except Exception as e:
+            remnawave_error_event = RemnawaveErrorEvent(
+                **config.build.data,
+                exception=e,
+            )
+            await event_bus.publish(remnawave_error_event)
+        else:
+            missing_panel_ids = await subscription_dao.get_current_missing_remnawave_ids()
+            if missing_panel_ids:
+                sample_ids = ", ".join(str(value) for value in missing_panel_ids[:10])
+                raise RuntimeError(
+                    "Refusing to start Remnashop with Remnawave v3: "
+                    f"{len(missing_panel_ids)} current subscription(s) have no "
+                    "numeric remnawave_user_id. Run scripts/remnawave_v3_migrate.py "
+                    "and verify its report before starting the bot. "
+                    f"Subscription ID sample: {sample_ids}"
+                )
+            logger.info(
+                f"Remnawave v{panel_version} connected; all current subscriptions "
+                "have numeric panel IDs"
+            )
         create_default_payment_gateway = await startup_container.get(CreateDefaultPaymentGateway)
         create_default_settings = await startup_container.get(CreateDefaultSettings)
         redis = await startup_container.get(Redis)
@@ -130,12 +158,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         registration_allowed=settings.access.registration_allowed,
     )
     await event_bus.publish(bot_startup_event)
-
-    try:
-        await remnawave_service.try_connection()
-    except Exception as e:
-        remnawave_error_event = RemnawaveErrorEvent(**config.build.data, exception=e)
-        await event_bus.publish(remnawave_error_event)
 
     yield
 
