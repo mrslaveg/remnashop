@@ -210,7 +210,9 @@ class RemnawaveImpl(Remnawave):
                 logger.debug(f"Remnawave user '{uuid}' was not found")
                 return False
             raise
-        self._user_ids.pop(UUID(str(uuid)), None) if isinstance(uuid, UUID) else None
+        for cached_uuid, cached_id in list(self._user_ids.items()):
+            if cached_id == user_id:
+                self._user_ids.pop(cached_uuid, None)
         logger.info(f"Remnawave user '{uuid}' deleted")
         return True
 
