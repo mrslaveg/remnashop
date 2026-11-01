@@ -1,9 +1,10 @@
 import asyncio
 import json
 import sys
-import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from aiogram.types import CallbackQuery
 from aiogram_dialog import DialogManager
@@ -13,47 +14,56 @@ from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 from redis.asyncio import Redis
 
+from src.application.common.policy import Permission, PermissionPolicy
 from src.application.dto import TelegramUserDto
 from src.core.constants import USER_KEY
 
 CONFIRMATION = "REMNAWAVE_V3_LOCAL_DB_ONLY"
 RUNNING_KEY = "remnashop:remnawave-v3-migration:running"
+AUDIT_DIR = Path("logs/remnawave-v3-migration")
 
 
 async def _run_migration(apply: bool) -> tuple[int, dict[str, Any], str]:
-    with tempfile.TemporaryDirectory(prefix="remnawave-v3-") as temp_dir:
-        report_path = str(Path(temp_dir) / "report.json")
-        command = [
-            sys.executable,
-            "scripts/remnawave_v3_migrate.py",
-            "--report-file",
-            report_path,
-        ]
-        if apply:
-            command.extend(["--apply", "--confirm", CONFIRMATION])
+    AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+    run_id = (
+        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        + "-"
+        + uuid4().hex[:8]
+    )
+    report_path = AUDIT_DIR / f"{run_id}.json"
+    log_path = AUDIT_DIR / f"{run_id}.log"
+    command = [
+        sys.executable,
+        "scripts/remnawave_v3_migrate.py",
+        "--report-file",
+        str(report_path),
+    ]
+    if apply:
+        command.extend(["--apply", "--confirm", CONFIRMATION])
 
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    try:
+        output, _ = await asyncio.wait_for(process.communicate(), timeout=900)
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        raise RuntimeError("Миграция превысила лимит времени (15 минут).")
+
+    log = output.decode("utf-8", errors="replace")
+    log_path.write_text(log, encoding="utf-8")
+    if not report_path.exists():
+        raise RuntimeError(
+            "Мигратор не создал JSON-отчёт. Последние сообщения:\\n" + log[-2500:]
         )
-        try:
-            output, _ = await asyncio.wait_for(process.communicate(), timeout=900)
-        except TimeoutError:
-            process.kill()
-            await process.wait()
-            raise RuntimeError("Миграция превысила лимит времени (15 минут).")
 
-        report_file = Path(report_path)
-        if not report_file.exists():
-            details = output.decode("utf-8", errors="replace")[-3000:]
-            raise RuntimeError(
-                "Мигратор не создал JSON-отчёт. Подробности:\n" + details
-            )
-
-        report = json.loads(report_file.read_text(encoding="utf-8"))
-        log = output.decode("utf-8", errors="replace")[-3500:]
-        return int(process.returncode or 0), report, log
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    log_tail = log[-2500:]
+    log_tail += f"\\nАудит: {report_path}\\nЛог: {log_path}"
+    return int(process.returncode or 0), report, log_tail
 
 
 def _is_clean(report: dict[str, Any]) -> bool:
@@ -70,6 +80,10 @@ def _is_clean(report: dict[str, Any]) -> bool:
     )
 
 
+def _is_authorized(user: TelegramUserDto) -> bool:
+    return PermissionPolicy.has_permission(user, Permission.VIEW_IMPORTER)
+
+
 @inject
 async def on_migration_check(
     callback: CallbackQuery,
@@ -78,6 +92,9 @@ async def on_migration_check(
     redis: FromDishka[Redis],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
+    if not _is_authorized(user):
+        await callback.answer("Недостаточно прав.", show_alert=True)
+        return
     if not await redis.set(RUNNING_KEY, str(user.telegram_id), nx=True, ex=1800):
         await callback.answer("Миграция уже выполняется.", show_alert=True)
         return
@@ -107,7 +124,7 @@ async def on_migration_check(
     except Exception as error:
         logger.exception("Remnawave v3 migration dry-run failed")
         dialog_manager.dialog_data["migration_result"] = f"Ошибка проверки: {error}"
-        dialog_manager.dialog_data["migration_log"] = str(error)[-3500:]
+        dialog_manager.dialog_data["migration_log"] = str(error)[-2500:]
     finally:
         await redis.delete(RUNNING_KEY)
 
@@ -120,6 +137,9 @@ async def on_migration_apply(
     redis: FromDishka[Redis],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
+    if not _is_authorized(user):
+        await callback.answer("Недостаточно прав.", show_alert=True)
+        return
     if not dialog_manager.dialog_data.get("migration_can_apply"):
         await callback.answer("Сначала выполните успешную проверку.", show_alert=True)
         return
@@ -142,8 +162,7 @@ async def on_migration_apply(
             )
         else:
             dialog_manager.dialog_data["migration_result"] = (
-                f"Миграция не завершена (код {code}). Изменения не применены либо "
-                "транзакция была отменена; изучите лог."
+                f"Миграция не завершена (код {code}). Изучите лог; транзакция могла быть отменена."
             )
         logger.info(
             "{} Remnawave migration apply finished: code={}, summary={}",
@@ -154,6 +173,6 @@ async def on_migration_apply(
     except Exception as error:
         logger.exception("Remnawave v3 migration apply failed")
         dialog_manager.dialog_data["migration_result"] = f"Ошибка применения: {error}"
-        dialog_manager.dialog_data["migration_log"] = str(error)[-3500:]
+        dialog_manager.dialog_data["migration_log"] = str(error)[-2500:]
     finally:
         await redis.delete(RUNNING_KEY)
