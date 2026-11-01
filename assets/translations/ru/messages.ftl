@@ -1542,32 +1542,25 @@ msg-importer-main = <b>📥 Импорт пользователей</b>
 msg-remnawave-migration-main =
     <b>🔄 Миграция Remnawave v3</b>
 
-    Миграция переносит числовые ID пользователей панели в локальную БД Remnashop. Пользователи и подписки в Remnawave не изменяются — разрешены только GET-запросы.
+    Перенос числовых ID пользователей панели в локальную БД Remnashop. Данные Remnawave не изменяются — только GET-запросы.
 
     <b>Версия панели</b>: { $panel_version }
     <b>API-режим</b>: { $panel_api_line }
     <b>Пользователей прочитано</b>: { $panel_users_read }
-    <b>Текущих подписок в боте</b>: { $local_current_subscriptions }
+    <b>Текущих подписок</b>: { $local_current_subscriptions }
 
-    <b>Результат последней проверки</b>
+    <b>Результат проверки</b>
     <blockquote>
     Совпадений: { $matched }
     Уже перенесено: { $already_migrated }
     Не найдено: { $unmatched }
     Конфликтов: { $conflict }
     Дубликатов: { $duplicate_local_mapping }
-    Конфликтов существующих ID: { $existing_id_conflict }
+    Конфликтов ID: { $existing_id_conflict }
     Других проблем: { $other_issues }
     </blockquote>
 
     <b>Статус</b>: { $result }
-
-    <b>Проблемные записи</b> ({ $issues_total }, первые 5):
-    <blockquote>{ $issues }</blockquote>
-
-    <b>Лог последнего запуска</b>:
-    <pre>{ $log }</pre>
-
 msg-remnawave-migration-confirm =
     <b>⚠️ Подтверждение миграции</b>
 
