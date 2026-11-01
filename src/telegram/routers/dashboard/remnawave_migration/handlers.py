@@ -69,7 +69,7 @@ async def _run_migration(apply: bool) -> tuple[int, dict[str, Any], str]:
 def _format_issues(report: dict[str, Any]) -> list[str]:
     unresolved = [
         match for match in report.get("matches", [])
-        if match.get("status") not in {"matched", "already_migrated"}
+        if match.get("status") not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"}
     ]
     formatted = []
     for match in unresolved[:5]:
