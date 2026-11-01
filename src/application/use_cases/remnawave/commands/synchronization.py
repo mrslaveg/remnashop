@@ -44,7 +44,14 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         remna_user = data.remna_user
 
         async with self.uow:
-            user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
+            existing_subscription = await self.subscription_dao.get_by_remnawave_id(
+                int(remna_user.id)
+            )
+            user = (
+                await self.user_dao.get_by_id(existing_subscription.user_id)
+                if existing_subscription
+                else None
+            )
 
             if not user and remna_user.telegram_id:
                 user = await self.user_dao.get_by_telegram_id(remna_user.telegram_id)
@@ -294,7 +301,11 @@ class SyncAllUsersFromPanel(Interactor[None, dict[str, int]]):
                     if existing_subscription:
                         user = await self.user_dao.get_by_id(existing_subscription.user_id)
                     else:
-                        user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
+                        existing_subscription = await self.subscription_dao.get_by_remnawave_id(
+                            int(remna_user.id)
+                        )
+                        if existing_subscription:
+                            user = await self.user_dao.get_by_id(existing_subscription.user_id)
 
                 if not user:
                     await self.sync_remna_user.system(SyncRemnaUserDto(remna_user, True))
