@@ -1,8 +1,8 @@
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from httpx import Request
-from uuid import uuid4
 
 from scripts.remnawave_v3_migrate import (
     LocalSubscription,
