@@ -57,7 +57,7 @@ class Match:
 
 
 async def _allow_get_only(request: Request) -> None:
-    """Fail closed before any non-GET request can reach the Remnawave panel."""
+    """Allow only the two read endpoints required for the migration."""
     if request.method.upper() != "GET" or request.url.path not in READ_ONLY_ENDPOINTS:
         raise PermissionError(
             "Read-only migration blocked Remnawave request: "
@@ -532,7 +532,7 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
             json.dumps(report, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\\n")
+        sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
         unresolved = [
             match for match in matches if match.status not in {"matched", "already_migrated"}
