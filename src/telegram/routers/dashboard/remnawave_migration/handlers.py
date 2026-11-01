@@ -71,7 +71,9 @@ async def _run_migration(apply: bool) -> tuple[int, dict[str, Any], str]:
 def _format_issues(report: dict[str, Any]) -> list[str]:
     unresolved = [
         match for match in report.get("matches", [])
-        if match.get("status") not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"}
+        if match.get("status") not in {
+            "matched", "already_migrated", "manually_mapped", "skipped_by_admin"
+        }
     ]
     formatted = []
     identities = report.get("local_identities", {})
@@ -114,7 +116,7 @@ async def on_migration_decision_message(
     widget: MessageInput,
     dialog_manager: DialogManager,
 ) -> None:
-    """Accept explicit admin commands: map <subscription_id> <panel_id> or skip <subscription_id>."""
+    """Accept explicit admin commands for manual mapping or skipping a subscription."""
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     if not _is_authorized(user):
         await message.answer("Недостаточно прав.")
@@ -162,7 +164,10 @@ async def on_migration_decision_message(
         return
     if process.returncode != 0:
         error_text = (stderr or stdout or b"Ошибка сохранения").decode("utf-8", errors="replace")
-        await message.answer(f"Не удалось сохранить решение:\n<code>{html.escape(error_text[-1200:])}</code>")
+        await message.answer(
+            f"Не удалось сохранить решение:\n"
+            f"<code>{html.escape(error_text[-1200:])}</code>"
+        )
         return
 
     await message.answer(f"Решение сохранено для подписки #{local_id}. Пересчитываю отчёт…")
@@ -187,7 +192,9 @@ async def on_migration_decision_message(
         )
     except Exception as error:
         logger.exception("Failed to refresh migration report after admin decision")
-        dialog_manager.dialog_data["migration_result"] = f"Решение сохранено, но отчёт не обновился: {error}"
+        dialog_manager.dialog_data["migration_result"] = (
+            f"Решение сохранено, но отчёт не обновился: {error}"
+        )
 
 @inject
 async def on_migration_check(
