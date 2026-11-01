@@ -172,7 +172,8 @@ class GetUserDevices(Interactor[int, GetUserDevicesResultDto]):
             raise ValueError(f"Subscription for '{user_id}' not found")
 
         devices = await self.remnawave.get_devices(
-            (subscription.remnawave_user_id or subscription.user_remna_id), username=target_user.remna_name
+            subscription.remnawave_user_id or subscription.user_remna_id,
+            username=target_user.remna_name
         )
 
         logger.info(f"{actor.log} Retrieved '{len(devices)}' devices for user '{user_id}'")
