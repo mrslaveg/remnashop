@@ -10,10 +10,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import sys
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
+import sys
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -325,7 +325,8 @@ def _build_report(
                         None,
                         "duplicate_local_mapping",
                         match.evidence,
-                        "Panel user " f"{match.panel_user_id} matched multiple local current subscriptions",
+                        f"Panel user {match.panel_user_id} matched multiple "
+                        "local current subscriptions",
                     )
                 )
             else:
