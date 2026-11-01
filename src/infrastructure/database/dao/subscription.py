@@ -106,6 +106,16 @@ class SubscriptionDaoImpl(SubscriptionDao, BaseDaoImpl):
         )
         return None
 
+    async def get_current_missing_remnawave_ids(self) -> list[int]:
+        stmt = (
+            select(Subscription.id)
+            .join(User, User.current_subscription_id == Subscription.id)
+            .where(Subscription.remnawave_user_id.is_(None))
+            .order_by(Subscription.id)
+        )
+        result = await self.session.scalars(stmt)
+        return list(result.all())
+
     async def get_by_url(self, url: str) -> Optional[SubscriptionDto]:
         stmt = (
             select(Subscription)
