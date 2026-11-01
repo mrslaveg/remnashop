@@ -144,6 +144,19 @@ async def on_migration_decision_message(
         await message.answer("ID должны быть положительными целыми числами.")
         return
 
+    current_matches = dialog_manager.dialog_data.get("migration_full_matches", [])
+    reviewable = any(
+        item.get("subscription_id") == local_id
+        and item.get("status") not in {"matched", "already_migrated"}
+        for item in current_matches
+    )
+    if not reviewable:
+        await message.answer(
+            "Эта подписка не находится среди нерешённых записей текущего отчёта. "
+            "Сначала обновите dry-run."
+        )
+        return
+
     command = [
         sys.executable, "scripts/remnawave_v3_migrate.py",
         "--decision-subscription", str(local_id),
