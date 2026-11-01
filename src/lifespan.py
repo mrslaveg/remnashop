@@ -66,6 +66,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except RemnawaveCompatibilityError:
             raise
         except Exception as e:
+            migration_only_mode = True
+            logger.critical(
+                "Could not verify Remnawave panel version; enabling restricted migration mode "
+                "until the panel is reachable and its version and local ID coverage are verified"
+            )
             remnawave_error_event = RemnawaveErrorEvent(
                 **config.build.data,
                 exception=e,
