@@ -48,7 +48,7 @@ class ToggleSubscriptionStatus(Interactor[int, SubscriptionStatus]):
             try:
                 if is_now_active:
                     await self.remnawave.enable_user(
-                        subscription.user_remna_id,
+                        (subscription.remnawave_user_id or subscription.user_remna_id),
                         username=target_user.remna_name,
                     )
                 else:
