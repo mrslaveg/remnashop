@@ -1,17 +1,16 @@
-from datetime import datetime, timezone
 import os
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
 
+from src.core.types import RemnaUserView
+
 os.environ.setdefault("BOT_TOKEN", "123456789:unit-test-token")
 os.environ.setdefault("BOT_SECRET_TOKEN", "unit-test-secret-token")
 os.environ.setdefault("BOT_OWNER_ID", "1")
 os.environ.setdefault("BOT_SUPPORT_USERNAME", "@support_test")
-
-from src.core.types import RemnaUserView
-from src.infrastructure.services.remnawave import RemnawaveImpl
 
 
 def test_v3_user_view_uses_vless_uuid_as_subscription_identifier() -> None:
@@ -58,9 +57,15 @@ class _FakeSDK:
         self.users = _FakeUsers(users)
 
 
+def _build_adapter(users: list[SimpleNamespace]):
+    from src.infrastructure.services.remnawave import RemnawaveImpl
+
+    return RemnawaveImpl(_FakeSDK(users))  # type: ignore[arg-type]
+
+
 @pytest.mark.asyncio
 async def test_numeric_panel_id_does_not_require_uuid_lookup() -> None:
-    adapter = RemnawaveImpl(_FakeSDK([]))  # type: ignore[arg-type]
+    adapter = _build_adapter([])
 
     assert await adapter._resolve_user_id(321, username="rs_123") == 321
 
@@ -69,7 +74,7 @@ async def test_numeric_panel_id_does_not_require_uuid_lookup() -> None:
 async def test_exact_vless_uuid_resolves_from_panel_stream() -> None:
     vless_uuid = uuid4()
     panel_user = SimpleNamespace(id=321, vless_uuid=vless_uuid, username="rs_123")
-    adapter = RemnawaveImpl(_FakeSDK([panel_user]))  # type: ignore[arg-type]
+    adapter = _build_adapter([panel_user])
 
     assert await adapter._resolve_user_id(vless_uuid) == 321
 
