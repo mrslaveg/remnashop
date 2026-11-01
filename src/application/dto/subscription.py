@@ -24,6 +24,7 @@ class SquadInfoDto:
 @dataclass(kw_only=True)
 class RemnaSubscriptionDto:
     uuid: UUID
+    remnawave_user_id: int
     status: SubscriptionStatus
     expire_at: datetime
     url: str
@@ -40,6 +41,7 @@ class RemnaSubscriptionDto:
     def from_remna_user(cls, remna_user: RemnaUserDto) -> "RemnaSubscriptionDto":
         return cls(
             uuid=remna_user.uuid,
+            remnawave_user_id=int(remna_user.id),
             status=SubscriptionStatus(remna_user.status),
             expire_at=remna_user.expire_at,
             url=remna_user.subscription_url,
@@ -56,6 +58,7 @@ class RemnaSubscriptionDto:
 class SubscriptionDto(BaseDto, TrackableMixin, TimestampMixin):
     user_id: int = 0
     user_remna_id: UUID
+    remnawave_user_id: Optional[int] = None
 
     status: SubscriptionStatus = SubscriptionStatus.ACTIVE
     is_trial: bool = False
