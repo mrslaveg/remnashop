@@ -6,8 +6,9 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram_dialog import DialogManager
+from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
@@ -72,13 +73,19 @@ def _format_issues(report: dict[str, Any]) -> list[str]:
         if match.get("status") not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"}
     ]
     formatted = []
-    for match in unresolved[:5]:
-        details = (match.get("details") or "Требуется ручная проверка.")[:180]
+    identities = report.get("local_identities", {})
+    for match in unresolved[:10]:
+        details = (match.get("details") or "Требуется ручная проверка.")[:120]
+        identity = identities.get(str(match.get("subscription_id")), {})
+        account = (
+            f"TG: {identity.get('telegram_id') or '—'}"
+            + (f" (@{identity['username']})" if identity.get("username") else "")
+        )
         candidates = match.get("candidate_panel_ids") or []
         candidate_text = f"; кандидаты: {candidates[:10]}" if candidates else ""
         formatted.append(
             f"Подписка #{match.get('subscription_id')}: "
-            f"{match.get('status')} — {details}{candidate_text}"
+            f"{match.get('status')} — {account} — {details}{candidate_text}"
         )
     return formatted
 
@@ -100,6 +107,86 @@ def _is_clean(report: dict[str, Any]) -> bool:
 def _is_authorized(user: TelegramUserDto) -> bool:
     return PermissionPolicy.has_permission(user, Permission.VIEW_IMPORTER)
 
+
+async def on_migration_decision_message(
+    message: Message,
+    widget: MessageInput,
+    dialog_manager: DialogManager,
+) -> None:
+    """Accept explicit admin commands: map <subscription_id> <panel_id> or skip <subscription_id>."""
+    user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
+    if not _is_authorized(user):
+        await message.answer("Недостаточно прав.")
+        return
+
+    parts = (message.text or "").strip().split()
+    if len(parts) == 3 and parts[0].lower() == "map":
+        action, subscription_id, panel_id = "manual_map", parts[1], parts[2]
+    elif len(parts) == 2 and parts[0].lower() == "skip":
+        action, subscription_id, panel_id = "skip", parts[1], None
+    else:
+        await message.answer(
+            "Команда не распознана. Используйте:\n"
+            "<code>map ID_подписки ЧИСЛОВОЙ_ID_ПАНЕЛИ</code> — ручное сопоставление\n"
+            "<code>skip ID_подписки</code> — явный пропуск."
+        )
+        return
+
+    try:
+        local_id = int(subscription_id)
+        numeric_id = int(panel_id) if panel_id is not None else None
+        if local_id <= 0 or (numeric_id is not None and numeric_id <= 0):
+            raise ValueError
+    except ValueError:
+        await message.answer("ID должны быть положительными целыми числами.")
+        return
+
+    command = [
+        sys.executable, "scripts/remnawave_v3_migrate.py",
+        "--decision-subscription", str(local_id),
+        "--decision-action", action,
+        "--admin-telegram-id", str(user.telegram_id),
+    ]
+    if numeric_id is not None:
+        command.extend(["--decision-panel-id", str(numeric_id)])
+    process = await asyncio.create_subprocess_exec(
+        *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        await message.answer("Сохранение решения превысило лимит времени.")
+        return
+    if process.returncode != 0:
+        error_text = (stderr or stdout or b"Ошибка сохранения").decode("utf-8", errors="replace")
+        await message.answer(f"Не удалось сохранить решение:\n<code>{html.escape(error_text[-1200:])}</code>")
+        return
+
+    await message.answer(f"Решение сохранено для подписки #{local_id}. Пересчитываю отчёт…")
+    try:
+        code, report, log = await _run_migration(apply=False)
+        dialog_manager.dialog_data["migration_report"] = {
+            key: value for key, value in report.items()
+            if key not in {"matches", "local_identities"}
+        }
+        dialog_manager.dialog_data["migration_log"] = log
+        dialog_manager.dialog_data["migration_issues"] = _format_issues(report)
+        dialog_manager.dialog_data["migration_full_matches"] = report.get("matches", [])
+        dialog_manager.dialog_data["migration_issues_total"] = sum(
+            count for status, count in report.get("summary", {}).items()
+            if status not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"}
+        )
+        clean = code == 0 and _is_clean(report)
+        dialog_manager.dialog_data["migration_can_apply"] = clean
+        dialog_manager.dialog_data["migration_result"] = (
+            "Проверка пройдена. Можно перейти к подтверждению применения."
+            if clean else "Есть записи, требующие ручной проверки."
+        )
+    except Exception as error:
+        logger.exception("Failed to refresh migration report after admin decision")
+        dialog_manager.dialog_data["migration_result"] = f"Решение сохранено, но отчёт не обновился: {error}"
 
 @inject
 async def on_migration_check(
