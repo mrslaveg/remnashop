@@ -163,7 +163,9 @@ async def on_migration_decision_message(
         await message.answer("Сохранение решения превысило лимит времени.")
         return
     if process.returncode != 0:
-        error_text = (stderr or stdout or "Ошибка сохранения".encode("utf-8")).decode("utf-8", errors="replace")
+        error_text = (stderr or stdout or "Ошибка сохранения".encode("utf-8")).decode(
+            "utf-8", errors="replace"
+        )
         await message.answer(
             f"Не удалось сохранить решение:\n"
             f"<code>{html.escape(error_text[-1200:])}</code>"
