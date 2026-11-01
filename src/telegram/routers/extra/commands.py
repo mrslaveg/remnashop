@@ -1,15 +1,18 @@
 from aiogram import Router
 from aiogram.filters import Command as FilterCommand
 from aiogram.types import Message
+from aiogram_dialog import DialogManager, StartMode
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 
 from src.application.common import BotService, Notifier, TranslatorRunner
+from src.application.common.policy import Permission, PermissionPolicy
 from src.application.common.dao import SettingsDao
 from src.application.dto import MessagePayloadDto, TelegramUserDto
 from src.core.enums import Command
 from src.telegram.keyboards import get_contact_support_keyboard
+from src.telegram.states import DashboardRemnawaveMigration
 
 router = Router(name=__name__)
 
@@ -79,4 +82,20 @@ async def on_help_command(
             disable_default_markup=False,
             delete_after=None,
         ),
+    )
+
+
+@router.message(FilterCommand("remnawave_migration"))
+async def on_remnawave_migration_command(
+    message: Message,
+    user: TelegramUserDto,
+    dialog_manager: DialogManager,
+) -> None:
+    if not PermissionPolicy.has_permission(user, Permission.VIEW_IMPORTER):
+        await message.answer("Недостаточно прав.")
+        return
+
+    await dialog_manager.start(
+        state=DashboardRemnawaveMigration.MAIN,
+        mode=StartMode.RESET_STACK,
     )
