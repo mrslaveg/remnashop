@@ -30,6 +30,7 @@ from src.infrastructure.database.models.user import User
 
 CONFIRMATION = "REMNAWAVE_V3_LOCAL_DB_ONLY"
 PAGE_SIZE = 1000
+READ_ONLY_ENDPOINTS = {"/api/system/metadata", "/api/users/stream"}
 
 
 @dataclass(frozen=True)
@@ -52,13 +53,15 @@ class Match:
     status: str
     evidence: tuple[str, ...]
     details: str = ""
+    candidate_panel_ids: tuple[int, ...] = ()
 
 
 async def _allow_get_only(request: Request) -> None:
     """Fail closed before any non-GET request can reach the Remnawave panel."""
-    if request.method.upper() != "GET":
+    if request.method.upper() != "GET" or request.url.path not in READ_ONLY_ENDPOINTS:
         raise PermissionError(
-            f"Read-only migration blocked non-GET Remnawave request: {request.method}"
+            "Read-only migration blocked Remnawave request: "
+            f"{request.method} {request.url.path}"
         )
 
 
@@ -100,10 +103,14 @@ def _index_panel_users(panel_users: list[Any]) -> dict[str, dict[Any, set[int]]]
         name: defaultdict(set)
         for name in ("url", "short_uuid", "telegram_id", "username")
     }
+    seen_panel_ids: set[int] = set()
     for panel_user in panel_users:
         panel_id = _as_int(getattr(panel_user, "id", None))
         if panel_id is None or panel_id <= 0:
             raise ValueError("Panel returned a user without a valid positive numeric id")
+        if panel_id in seen_panel_ids:
+            raise ValueError(f"Panel users stream returned duplicate numeric ID {panel_id}")
+        seen_panel_ids.add(panel_id)
 
         url = _normalize_url(getattr(panel_user, "subscription_url", None))
         short_uuid = getattr(panel_user, "short_uuid", None)
@@ -161,6 +168,11 @@ def _match_from_evidence(
     status: str,
     details: str,
 ) -> Match:
+    candidate_ids = (
+        tuple(sorted(set().union(*evidence.values())))
+        if evidence
+        else ()
+    )
     return Match(
         subscription_id=local.subscription_id,
         user_id=local.user_id,
@@ -168,6 +180,7 @@ def _match_from_evidence(
         status=status,
         evidence=tuple(sorted(evidence)),
         details=details,
+        candidate_panel_ids=candidate_ids,
     )
 
 
@@ -326,6 +339,7 @@ def _build_report(
                         match.evidence,
                         f"Panel user {match.panel_user_id} matched multiple "
                         "local current subscriptions",
+                        (match.panel_user_id,) if match.panel_user_id is not None else (),
                     )
                 )
             else:
@@ -345,6 +359,7 @@ def _build_report(
                         match.panel_user_id,
                         "already_migrated",
                         match.evidence,
+                        candidate_panel_ids=(match.panel_user_id,),
                     )
                 )
                 continue
@@ -356,6 +371,7 @@ def _build_report(
                     "existing_id_conflict",
                     match.evidence,
                     "Local numeric ID is already set and differs from the read-only panel match",
+                    match.candidate_panel_ids,
                 )
             )
             continue
@@ -404,6 +420,7 @@ async def _apply_local_mapping(
                     or subscription.url != snapshot.url
                     or user.current_subscription_id != snapshot.current_subscription_id
                     or user.telegram_id != snapshot.telegram_id
+                    or subscription.remnawave_user_id != snapshot.existing_panel_id
                 ):
                     raise RuntimeError(
                         f"Local subscription {subscription.id} changed during migration; "
@@ -432,6 +449,22 @@ async def _apply_local_mapping(
                         )
                     changed += 1
     return changed
+
+
+def _panel_snapshot_fingerprint(panel_users: list[Any]) -> tuple[tuple[Any, ...], ...]:
+    records = []
+    for panel_user in panel_users:
+        records.append(
+            (
+                _as_int(getattr(panel_user, "id", None)),
+                _normalize_url(getattr(panel_user, "subscription_url", None)),
+                str(getattr(panel_user, "short_uuid", "") or ""),
+                _as_int(getattr(panel_user, "telegram_id", None)),
+                str(getattr(panel_user, "username", "") or "").casefold(),
+                str(getattr(panel_user, "updated_at", "") or ""),
+            )
+        )
+    return tuple(sorted(records, key=lambda item: item[0] or -1))
 
 
 def _summary(matches: list[Match]) -> dict[str, int]:
@@ -476,10 +509,20 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
         matches = _build_report(local, panel_users)
         summary = _summary(matches)
 
+        panel_snapshot_verified: Optional[bool] = None
+        if apply:
+            second_panel_read, second_panel_version = await _fetch_panel_users(sdk)
+            panel_snapshot_verified = (
+                panel_version == second_panel_version
+                and _panel_snapshot_fingerprint(panel_users)
+                == _panel_snapshot_fingerprint(second_panel_read)
+            )
+
         report = {
             "mode": "apply_local_database_only" if apply else "dry_run",
             "panel_version": panel_version,
             "panel_users_read": len(panel_users),
+            "panel_snapshot_verified": panel_snapshot_verified,
             "local_current_subscriptions": len(local),
             "summary": summary,
             "matches": [asdict(match) for match in matches],
@@ -501,6 +544,12 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
                 len(unresolved),
             )
             return 2
+
+        if apply and not panel_snapshot_verified:
+            logger.error(
+                "Panel snapshot changed between read-only scans; refusing local DB writes."
+            )
+            return 3
 
         if apply:
             changed = await _apply_local_mapping(session_factory, local, matches)
