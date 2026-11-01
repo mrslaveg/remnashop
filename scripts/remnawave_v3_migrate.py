@@ -403,16 +403,86 @@ async def _load_local_subscriptions(
     return locals_
 
 
+def _match_existing_numeric_id(
+    local: LocalSubscription,
+    panel_user: Optional[Any],
+) -> Match:
+    """Verify a v2-migrated mapping by its already persisted numeric panel ID."""
+    panel_id = local.existing_panel_id
+    assert panel_id is not None
+
+    if panel_user is None:
+        return Match(
+            local.subscription_id,
+            local.user_id,
+            None,
+            "existing_id_conflict",
+            ("numeric_panel_id",),
+            f"Stored Remnawave user ID {panel_id} is absent from the v3 users stream",
+            (panel_id,),
+        )
+
+    local_telegram_id = local.telegram_id
+    panel_telegram_id = _as_int(getattr(panel_user, "telegram_id", None))
+    if (
+        local_telegram_id is not None
+        and panel_telegram_id is not None
+        and local_telegram_id != panel_telegram_id
+    ):
+        return Match(
+            local.subscription_id,
+            local.user_id,
+            None,
+            "existing_id_conflict",
+            ("numeric_panel_id", "telegram_id"),
+            (
+                f"Stored numeric ID {panel_id} exists, but its Telegram ID "
+                f"{panel_telegram_id} differs from local Telegram ID {local_telegram_id}"
+            ),
+            (panel_id,),
+        )
+
+    evidence = ["numeric_panel_id"]
+    if local_telegram_id is not None and panel_telegram_id == local_telegram_id:
+        evidence.append("telegram_id")
+    return Match(
+        local.subscription_id,
+        local.user_id,
+        panel_id,
+        "already_migrated",
+        tuple(evidence),
+        "Stored numeric Remnawave user ID exists in the v3 users stream",
+        (panel_id,),
+    )
+
+
 def _build_report(
     local_subscriptions: list[LocalSubscription],
     panel_users: list[Any],
 ) -> list[Match]:
     indexes = _index_panel_users(panel_users)
-    matches = [_match_subscription(local, indexes) for local in local_subscriptions]
+    users_by_id = {
+        _as_int(getattr(panel_user, "id", None)): panel_user
+        for panel_user in panel_users
+    }
+    matches: list[Match] = []
+    for local in local_subscriptions:
+        if local.existing_panel_id is not None:
+            matches.append(
+                _match_existing_numeric_id(
+                    local,
+                    users_by_id.get(local.existing_panel_id),
+                )
+            )
+        else:
+            matches.append(_match_subscription(local, indexes))
 
     reverse: dict[int, list[Match]] = defaultdict(list)
     for match in matches:
-        if match.status == "matched" and match.panel_user_id is not None:
+        if (
+            match.status in {"matched", "already_migrated"}
+            and match.panel_user_id is not None
+        ):
             reverse[match.panel_user_id].append(match)
 
     duplicates = {
@@ -429,47 +499,18 @@ def _build_report(
                         None,
                         "duplicate_local_mapping",
                         match.evidence,
-                        f"Panel user {match.panel_user_id} matched multiple "
-                        "local current subscriptions",
-                        (match.panel_user_id,) if match.panel_user_id is not None else (),
+                        (
+                            f"Panel user {match.panel_user_id} is mapped to multiple "
+                            "local current subscriptions"
+                        ),
+                        (match.panel_user_id,),
                     )
                 )
             else:
                 rebuilt.append(match)
         matches = rebuilt
 
-    by_subscription = {local.subscription_id: local for local in local_subscriptions}
-    final: list[Match] = []
-    for match in matches:
-        local = by_subscription[match.subscription_id]
-        if local.existing_panel_id is not None:
-            if match.status == "matched" and match.panel_user_id == local.existing_panel_id:
-                final.append(
-                    Match(
-                        match.subscription_id,
-                        match.user_id,
-                        match.panel_user_id,
-                        "already_migrated",
-                        match.evidence,
-                        candidate_panel_ids=(match.panel_user_id,),
-                    )
-                )
-                continue
-            final.append(
-                Match(
-                    match.subscription_id,
-                    match.user_id,
-                    None,
-                    "existing_id_conflict",
-                    match.evidence,
-                    "Local numeric ID is already set and differs from the read-only panel match",
-                    match.candidate_panel_ids,
-                )
-            )
-            continue
-        final.append(match)
-    return final
-
+    return matches
 
 
 def _match_v2_subscription(
