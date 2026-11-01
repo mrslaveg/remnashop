@@ -5,7 +5,6 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 from aiogram_dialog.utils import remove_intent_id
 from dishka import AsyncContainer
 from loguru import logger
-
 from redis.asyncio import Redis
 from src.application.common.policy import Permission, PermissionPolicy
 from src.application.dto import TelegramUserDto
@@ -16,7 +15,7 @@ from .base import EventTypedMiddleware
 
 
 class MigrationGuardMiddleware(EventTypedMiddleware):
-    """Restrict Telegram updates to the migration UI while v3 IDs are incomplete."""
+    """Restrict Telegram updates to the migration UI while migration is required."""
 
     __event_types__ = [MiddlewareEventType.MESSAGE, MiddlewareEventType.CALLBACK_QUERY]
 
