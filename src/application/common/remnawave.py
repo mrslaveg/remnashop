@@ -54,27 +54,27 @@ class Remnawave(Protocol):
     async def get_all_users(self, limit: int, offset: int) -> List[RemnaUserView]: ...
 
     async def get_devices(
-        self, uuid: UUID, *, username: Optional[str] = None
+        self, uuid: RemnaUserId, *, username: Optional[str] = None
     ) -> List[HwidDeviceDto]: ...
 
     async def delete_device(
-        self, user_uuid: UUID, hwid: str, *, username: Optional[str] = None
+        self, user_uuid: RemnaUserId, hwid: str, *, username: Optional[str] = None
     ) -> Optional[int]: ...
 
     async def delete_all_devices(
-        self, user_uuid: UUID, *, username: Optional[str] = None
+        self, user_uuid: RemnaUserId, *, username: Optional[str] = None
     ) -> None: ...
 
     async def drop_connections(
-        self, user_uuid: UUID, *, username: Optional[str] = None
+        self, user_uuid: RemnaUserId, *, username: Optional[str] = None
     ) -> None: ...
 
     async def reset_traffic(
-        self, uuid: UUID, *, username: Optional[str] = None
+        self, uuid: RemnaUserId, *, username: Optional[str] = None
     ) -> Optional[RemnaUserView]: ...
 
     async def revoke_subscription(
-        self, uuid: UUID, *, username: Optional[str] = None
+        self, uuid: RemnaUserId, *, username: Optional[str] = None
     ) -> None: ...
 
     async def get_squads_available(self) -> bool: ...
