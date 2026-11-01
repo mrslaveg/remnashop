@@ -57,6 +57,8 @@ def get_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
         allowed_paths = {
             config.bot.webhook_path,
             f"{API_V1}{REMNAWAVE_WEBHOOK_PATH}",
+            "/health",
+            "/health/details",
         }
         if request.url.path not in allowed_paths:
             return JSONResponse(
