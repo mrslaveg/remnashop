@@ -115,7 +115,7 @@ class RemnawaveImpl(Remnawave):
 
     async def _resolve_user_id(
         self,
-        user_uuid: UUID | int,
+        user_uuid: UUID | int | int,
         *,
         username: Optional[str] = None,
     ) -> int:
@@ -303,14 +303,14 @@ class RemnawaveImpl(Remnawave):
             cursor = next_cursor
 
     async def get_devices(
-        self, user_uuid: UUID, *, username: Optional[str] = None
+        self, user_uuid: UUID | int, *, username: Optional[str] = None
     ) -> list[HwidDeviceDto]:
         user_id = await self._resolve_user_id(user_uuid, username=username)
         response = await self.sdk.hwid.get_hwid_user(user_id)
         return response.devices if response.total else []
 
     async def delete_device(
-        self, user_uuid: UUID, hwid_uuid: str, *, username: Optional[str] = None
+        self, user_uuid: UUID | int, hwid_uuid: str, *, username: Optional[str] = None
     ) -> Optional[int]:
         try:
             user_id = await self._resolve_user_id(user_uuid, username=username)
@@ -327,7 +327,7 @@ class RemnawaveImpl(Remnawave):
         )
         return int(response.total)
 
-    async def delete_all_devices(self, user_uuid: UUID | int, *, username: Optional[str] = None) -> None:
+    async def delete_all_devices(self, user_uuid: UUID | int | int, *, username: Optional[str] = None) -> None:
         try:
             user_id = await self._resolve_user_id(user_uuid, username=username)
             result = await self.sdk.hwid.delete_all_hwid_user(
@@ -339,7 +339,7 @@ class RemnawaveImpl(Remnawave):
             raise
         logger.info(f"Deleted all HWID devices ({result.total}) for user '{user_uuid}'")
 
-    async def drop_connections(self, user_uuid: UUID | int, *, username: Optional[str] = None) -> None:
+    async def drop_connections(self, user_uuid: UUID | int | int, *, username: Optional[str] = None) -> None:
         try:
             user_id = await self._resolve_user_id(user_uuid, username=username)
             await self.sdk.connections.drop_connections(
@@ -364,7 +364,7 @@ class RemnawaveImpl(Remnawave):
             raise
         return self._remember(payload)
 
-    async def revoke_subscription(self, uuid: UUID, *, username: Optional[str] = None) -> None:
+    async def revoke_subscription(self, uuid: UUID | int, *, username: Optional[str] = None) -> None:
         try:
             user_id = await self._resolve_user_id(uuid, username=username)
             await self.sdk.users.revoke_user_subscription(user_id)
