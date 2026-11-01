@@ -388,18 +388,9 @@ class RemnawaveImpl(Remnawave):
 
         target_fields = {f.name for f in fields(target)}
         source_fields = {f.name for f in fields(source)}
-        field_map = {"user_remna_id": "uuid"}
-
-        for target_field, source_field in field_map.items():
-            if target_field in target_fields and source_field in source_fields:
-                old_value = getattr(target, target_field)
-                new_value = getattr(source, source_field)
-                if old_value != new_value:
-                    logger.debug(
-                        f"Field '{target_field}' changed from '{old_value}' to '{new_value}'"
-                    )
-                    setattr(target, target_field, new_value)
-
+        # The legacy UUID is local historical identity. Remnawave v3 numeric IDs are
+        # synchronized via the explicit remnawave_user_id field below; never overwrite
+        # user_remna_id with vless_uuid from the v3 response.
         for field_name in target_fields & source_fields:
             old_value = getattr(target, field_name)
             new_value = getattr(source, field_name)
