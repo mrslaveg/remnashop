@@ -269,6 +269,17 @@ def _match_subscription(
     return _match_secondary_identifiers(local, evidence)
 
 
+def _panel_api_line(panel_version: Version) -> str:
+    """Select the user identity contract exposed by a supported panel version."""
+    if Version("2.7.0") <= panel_version < Version("2.9.0"):
+        return "v2_legacy_uuid_lookup"
+    if panel_version >= Version("3.0.0"):
+        return "v3_users_stream"
+    raise RuntimeError(
+        f"Remnawave {panel_version} is not supported; expected 2.7.x/2.8.x or 3.0.0+"
+    )
+
+
 async def _fetch_panel_version(client: AsyncClient) -> Version:
     """Read the version using the shared metadata route available on both API lines."""
     base_url = str(client.base_url).rstrip("/")
@@ -776,19 +787,13 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
         local = await _load_local_subscriptions(session_factory)
         panel_version_value = await _fetch_panel_version(client)
 
-        if Version("2.7.0") <= panel_version_value < Version("2.9.0"):
-            panel_api_line = "v2_legacy_uuid_lookup"
+        panel_api_line = _panel_api_line(panel_version_value)
+        if panel_api_line == "v2_legacy_uuid_lookup":
             panel_users = await _fetch_panel_users_v2(client, local)
             matches = _build_v2_report(local, panel_users)
-        elif panel_version_value >= Version("3.0.0"):
-            panel_api_line = "v3_users_stream"
+        else:
             panel_users = await _fetch_panel_users_v3(sdk)
             matches = _build_report(local, panel_users)
-        else:
-            raise RuntimeError(
-                f"Remnawave {panel_version_value} is not supported; expected 2.7.x/2.8.x "
-                "or 3.0.0+"
-            )
 
         panel_version = str(panel_version_value)
         summary = _summary(matches)
