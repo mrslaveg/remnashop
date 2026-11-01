@@ -10,7 +10,8 @@ from scripts.remnawave_v3_migrate import (
     _build_report,
     _build_v2_report,
     _fetch_panel_users_v2,
-    _index_panel_users,
+    _fetch_panel_version,
+     _index_panel_users,
     _match_subscription,
     _panel_snapshot_fingerprint,
     _short_uuid_from_url,
@@ -257,6 +258,31 @@ def test_v2_duplicate_legacy_uuid_mapping_is_blocked():
     assert {match.status for match in matches} == {"duplicate_local_mapping"}
 
 
+
+
+@pytest.mark.asyncio
+async def test_remnawave_2_8_0_metadata_is_read_through_v2_compatible_route():
+    requests: list[Request] = []
+
+    async def handler(request: Request) -> Response:
+        requests.append(request)
+        return Response(
+            200,
+            json={"response": {"version": "2.8.0"}},
+            request=request,
+        )
+
+    async with AsyncClient(
+        base_url="https://panel.example/api",
+        transport=MockTransport(handler),
+        event_hooks={"request": [_allow_get_only]},
+    ) as client:
+        version = await _fetch_panel_version(client)
+
+    assert str(version) == "2.8.0"
+    assert len(requests) == 1
+    assert requests[0].method == "GET"
+    assert requests[0].url.path == "/api/system/metadata"
 
 
 @pytest.mark.asyncio
