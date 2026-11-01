@@ -477,20 +477,15 @@ def _build_report(
         else:
             matches.append(_match_subscription(local, indexes))
 
+    locals_by_subscription = {
+        item.subscription_id: item for item in local_subscriptions
+    }
     reverse: dict[int, list[Match]] = defaultdict(list)
     for match in matches:
-        assigned_id = (
-            match.panel_user_id
-            if match.status in {"matched", "already_migrated"}
-            else None
-        )
-        if assigned_id is None:
-            local = next(
-                item
-                for item in local_subscriptions
-                if item.subscription_id == match.subscription_id
-            )
-            assigned_id = local.existing_panel_id
+        local = locals_by_subscription[match.subscription_id]
+        assigned_id = local.existing_panel_id
+        if assigned_id is None and match.status == "matched":
+            assigned_id = match.panel_user_id
         if assigned_id is not None:
             reverse[assigned_id].append(match)
 
@@ -500,7 +495,13 @@ def _build_report(
     if duplicates:
         rebuilt: list[Match] = []
         for match in matches:
-            if match.panel_user_id in duplicates:
+            local = locals_by_subscription[match.subscription_id]
+            assigned_id = (
+                local.existing_panel_id
+                if local.existing_panel_id is not None
+                else match.panel_user_id
+            )
+            if assigned_id in duplicates:
                 rebuilt.append(
                     Match(
                         match.subscription_id,
@@ -509,10 +510,10 @@ def _build_report(
                         "duplicate_local_mapping",
                         match.evidence,
                         (
-                            f"Panel user {match.panel_user_id} is mapped to multiple "
+                            f"Panel user {assigned_id} is mapped to multiple "
                             "local current subscriptions"
                         ),
-                        (match.panel_user_id,),
+                        (assigned_id,),
                     )
                 )
             else:
