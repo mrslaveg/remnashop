@@ -800,6 +800,26 @@ async def _apply_local_mapping(  # noqa: C901
                     "Local current subscriptions changed during migration; retry dry-run"
                 )
 
+            requested_ids = set(mappings.values())
+            if requested_ids:
+                assigned_result = await session.execute(
+                    select(Subscription.id, Subscription.remnawave_user_id).where(
+                        Subscription.remnawave_user_id.in_(requested_ids)
+                    )
+                )
+                assigned_elsewhere = {
+                    panel_id: subscription_id
+                    for subscription_id, panel_id in assigned_result.all()
+                    if panel_id is not None
+                }
+                for subscription_id, panel_id in mappings.items():
+                    other_subscription = assigned_elsewhere.get(panel_id)
+                    if other_subscription is not None and other_subscription != subscription_id:
+                        raise RuntimeError(
+                            f"Remnawave ID {panel_id} is already stored on "
+                            f"local subscription {other_subscription}"
+                        )
+
             for subscription, user in locked:
                 snapshot = expected[subscription.id]
                 if (
