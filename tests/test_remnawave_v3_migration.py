@@ -7,7 +7,6 @@ from packaging.version import Version
 
 from scripts.remnawave_v3_migrate import (
     LocalSubscription,
-    Match,
     _allow_get_only,
     _apply_admin_decisions,
     _build_report,
