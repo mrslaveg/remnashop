@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import hashlib
+import json
 import re
 import sys
 from collections import defaultdict
