@@ -56,6 +56,14 @@ class Match:
     details: str = ""
 
 
+async def _allow_get_only(request: Request) -> None:
+    """Fail closed before any non-GET request can reach the Remnawave panel."""
+    if request.method.upper() != "GET":
+        raise PermissionError(
+            f"Read-only migration blocked non-GET Remnawave request: {request.method}"
+        )
+
+
 def _normalize_url(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
@@ -385,7 +393,7 @@ async def _apply_local_mapping(
                         f"Subscription {subscription.id} already has a different numeric panel ID"
                     )
                 if subscription.remnawave_user_id is None:
-                    await session.execute(
+                    result = await session.execute(
                         update(Subscription)
                         .where(
                             Subscription.id == subscription.id,
@@ -393,6 +401,10 @@ async def _apply_local_mapping(
                         )
                         .values(remnawave_user_id=target_id)
                     )
+                    if result.rowcount != 1:
+                        raise RuntimeError(
+                            f"Concurrent update detected for local subscription {subscription.id}"
+                        )
                     changed += 1
     return changed
 
@@ -424,19 +436,13 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
         headers["x-forwarded-proto"] = "https"
         headers["x-forwarded-for"] = "127.0.0.1"
 
-    async def allow_get_only(request: Request) -> None:
-        if request.method.upper() != "GET":
-            raise PermissionError(
-                f"Read-only migration blocked non-GET Remnawave request: {request.method}"
-            )
-
     client = AsyncClient(
         base_url=f"{config.remnawave.url.get_secret_value()}/api",
         headers=headers,
         cookies=config.remnawave.cookies,
         verify=True,
         timeout=Timeout(connect=15.0, read=60.0, write=10.0, pool=5.0),
-        event_hooks={"request": [allow_get_only]},
+        event_hooks={"request": [_allow_get_only]},
     )
     try:
         sdk = RemnawaveSDK(client)
