@@ -8,6 +8,7 @@ from aiogram.types import WebhookInfo
 from dishka import AsyncContainer, Scope
 from fastapi import FastAPI
 from loguru import logger
+from packaging.version import Version
 from redis.asyncio import Redis
 
 from src.application.common import BotService, Remnawave
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         remnawave_service = await startup_container.get(Remnawave)
         subscription_dao = await startup_container.get(SubscriptionDao)
 
+        migration_only_mode: Optional[bool] = None
         try:
             panel_version = await remnawave_service.try_connection()
         except RemnawaveCompatibilityError:
@@ -70,13 +72,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await event_bus.publish(remnawave_error_event)
         else:
             missing_panel_ids = await subscription_dao.get_current_missing_remnawave_ids()
-            if missing_panel_ids:
-                sample_ids = ", ".join(str(value) for value in missing_panel_ids[:10])
+            migration_only_mode = panel_version < Version("3.0.0") or bool(missing_panel_ids)
+            if migration_only_mode:
+                sample_ids = ", ".join(str(value) for value in missing_panel_ids[:10]) or "none"
                 logger.critical(
-                    "Remnawave v{} is connected, but {} current subscription(s) "
-                    "have no numeric remnawave_user_id. Starting in restricted "
-                    "migration mode: Telegram middleware permits only authorized "
-                    "administrators to open the migration screen. Sample subscription IDs: {}",
+                    "Remnawave v{} connected; migration-only mode enabled "
+                    "(missing numeric IDs: {}). Only authorized administrators can use "
+                    "the migration screen. Open /remnawave_migration. Sample subscription IDs: {}",
                     panel_version,
                     len(missing_panel_ids),
                     sample_ids,
@@ -89,6 +91,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         create_default_payment_gateway = await startup_container.get(CreateDefaultPaymentGateway)
         create_default_settings = await startup_container.get(CreateDefaultSettings)
         redis = await startup_container.get(Redis)
+        if migration_only_mode is True:
+            await redis.set(REMNAWAVE_MIGRATION_GUARD_KEY, "1")
+        elif migration_only_mode is False:
+            await redis.delete(REMNAWAVE_MIGRATION_GUARD_KEY)
         retort = await startup_container.get(Retort)
 
         if not await bot_service.is_inline_enabled():
