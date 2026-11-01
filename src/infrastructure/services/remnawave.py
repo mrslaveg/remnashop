@@ -115,7 +115,7 @@ class RemnawaveImpl(Remnawave):
 
     async def _resolve_user_id(
         self,
-        user_uuid: UUID | int | int,
+        user_uuid: UUID | int,
         *,
         username: Optional[str] = None,
     ) -> int:
@@ -327,7 +327,7 @@ class RemnawaveImpl(Remnawave):
         )
         return int(response.total)
 
-    async def delete_all_devices(self, user_uuid: UUID | int | int, *, username: Optional[str] = None) -> None:
+    async def delete_all_devices(self, user_uuid: UUID | int, *, username: Optional[str] = None) -> None:
         try:
             user_id = await self._resolve_user_id(user_uuid, username=username)
             result = await self.sdk.hwid.delete_all_hwid_user(
@@ -339,7 +339,7 @@ class RemnawaveImpl(Remnawave):
             raise
         logger.info(f"Deleted all HWID devices ({result.total}) for user '{user_uuid}'")
 
-    async def drop_connections(self, user_uuid: UUID | int | int, *, username: Optional[str] = None) -> None:
+    async def drop_connections(self, user_uuid: UUID | int, *, username: Optional[str] = None) -> None:
         try:
             user_id = await self._resolve_user_id(user_uuid, username=username)
             await self.sdk.connections.drop_connections(
