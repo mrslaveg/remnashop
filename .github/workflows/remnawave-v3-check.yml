@@ -51,6 +51,8 @@ jobs:
           src/web/endpoints/public/subscription.py
           src/infrastructure/taskiq/tasks/importer.py
           src/infrastructure/database/models/base.py
+          src/infrastructure/database/models/remnawave_migration.py
+          src/infrastructure/database/migrations/versions/0042_remnawave_migration_decisions.py
           src/infrastructure/database/models/plan.py
           src/telegram/routers/dashboard/users/user/getters.py
           src/telegram/routers/dashboard/importer/getters.py
