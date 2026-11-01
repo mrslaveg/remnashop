@@ -1,7 +1,7 @@
 from typing import Any, Awaitable, Callable
 
-from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, TelegramObject
+from aiogram_dialog import DialogManager
 from aiogram_dialog.utils import remove_intent_id
 from dishka import AsyncContainer
 from loguru import logger
@@ -44,8 +44,12 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
             await self._deny(event)
             return None
 
-        state: FSMContext | None = data.get("state")
-        current_state = await state.get_state() if state else None
+        # aiogram-dialog stores its active state in DialogManager's context;
+        # FSMContext.get_state() does not reliably expose it at this middleware stage.
+        dialog_manager: DialogManager | None = data.get("dialog_manager")
+        dialog_state = None
+        if dialog_manager is not None and dialog_manager.has_context():
+            dialog_state = dialog_manager.current_context().state.state
 
         if isinstance(event, Message):
             command = (event.text or "").split(maxsplit=1)[0].split("@", 1)[0]
@@ -55,13 +59,13 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
         if isinstance(event, CallbackQuery):
             payload = remove_intent_id(event.data or "")
             action = payload[-1] if payload else ""
-            if current_state == "MainMenu:MAIN" and action == "dashboard":
+            if dialog_state == "MainMenu:MAIN" and action == "dashboard":
                 return await handler(event, data)
-            if current_state == "Dashboard:MAIN" and action == "remnawave_migration":
+            if dialog_state == "Dashboard:MAIN" and action == "remnawave_migration":
                 return await handler(event, data)
             if (
-                current_state
-                and current_state.startswith("DashboardRemnawaveMigration:")
+                dialog_state
+                and dialog_state.startswith("DashboardRemnawaveMigration:")
                 and action in {"migration_check", "migration_apply", "migration_confirm", "back"}
             ):
                 return await handler(event, data)
