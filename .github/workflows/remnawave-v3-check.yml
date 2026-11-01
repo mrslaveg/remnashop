@@ -74,6 +74,7 @@ jobs:
           src/application/common/dao/subscription.py
           src/infrastructure/database/dao/subscription.py
           src/lifespan.py
+          src/web/app.py
           src/application/events/system.py
           src/application/events/__init__.py
           src/core/constants.py
