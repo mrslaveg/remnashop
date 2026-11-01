@@ -1,8 +1,14 @@
 from datetime import datetime, timezone
+import os
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+
+os.environ.setdefault("BOT_TOKEN", "123456789:unit-test-token")
+os.environ.setdefault("BOT_SECRET_TOKEN", "unit-test-secret-token")
+os.environ.setdefault("BOT_OWNER_ID", "1")
+os.environ.setdefault("BOT_SUPPORT_USERNAME", "@support_test")
 
 from src.core.types import RemnaUserView
 from src.infrastructure.services.remnawave import RemnawaveImpl
