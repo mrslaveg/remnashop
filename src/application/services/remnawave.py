@@ -1,5 +1,6 @@
 from datetime import timedelta
 from enum import StrEnum
+from typing import Optional
 
 from loguru import logger
 from redis.asyncio import Redis
