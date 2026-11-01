@@ -1,8 +1,12 @@
 from types import SimpleNamespace
+
+import pytest
+from httpx import Request
 from uuid import uuid4
 
 from scripts.remnawave_v3_migrate import (
     LocalSubscription,
+    _allow_get_only,
     _build_report,
     _index_panel_users,
     _match_subscription,
@@ -108,3 +112,12 @@ def test_one_panel_user_cannot_be_assigned_to_two_local_subscriptions():
         [panel(321, short_uuid="same-token")],
     )
     assert {item.status for item in report} == {"duplicate_local_mapping"}
+
+
+
+@pytest.mark.asyncio
+async def test_panel_http_guard_allows_get_and_rejects_mutations():
+    await _allow_get_only(Request("GET", "https://panel.example/api/users"))
+
+    with pytest.raises(PermissionError, match="blocked non-GET"):
+        await _allow_get_only(Request("POST", "https://panel.example/api/users"))
