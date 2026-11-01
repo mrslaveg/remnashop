@@ -1,7 +1,7 @@
 from typing import Any, Awaitable, Callable
 
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, TelegramObject
+from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, TelegramObject
 from aiogram_dialog.utils import remove_intent_id
 from dishka import AsyncContainer
 from loguru import logger
@@ -22,7 +22,11 @@ from .base import EventTypedMiddleware
 class MigrationGuardMiddleware(EventTypedMiddleware):
     """Restrict Telegram updates to the migration UI while migration is required."""
 
-    __event_types__ = [MiddlewareEventType.MESSAGE, MiddlewareEventType.CALLBACK_QUERY]
+    __event_types__ = [
+        MiddlewareEventType.MESSAGE,
+        MiddlewareEventType.CALLBACK_QUERY,
+        MiddlewareEventType.PRE_CHECKOUT_QUERY,
+    ]
 
     async def middleware_logic(
         self,
@@ -79,3 +83,5 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
             await event.answer(message)
         elif isinstance(event, CallbackQuery):
             await event.answer(message, show_alert=True)
+        elif isinstance(event, PreCheckoutQuery):
+            await event.answer(ok=False, error_message=message)
