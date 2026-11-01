@@ -24,7 +24,7 @@ class MatchSubscription(Interactor[MatchSubscriptionDto, bool]):
             return False
 
         is_match = (
-            bot_sub.user_remna_id == remna_sub.uuid
+            bot_sub.remnawave_user_id == remna_sub.remnawave_user_id
             and bot_sub.status == remna_sub.status
             and bot_sub.url == remna_sub.url
             and bot_sub.traffic_limit == remna_sub.traffic_limit
