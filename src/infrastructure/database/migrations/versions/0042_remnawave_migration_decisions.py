@@ -62,11 +62,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("subscription_id"),
     )
     op.create_index(
-        "ix_remnawave_migration_decisions_subscription_id",
-        "remnawave_migration_decisions",
-        ["subscription_id"],
-    )
-    op.create_index(
         "ix_remnawave_migration_decisions_user_id",
         "remnawave_migration_decisions",
         ["user_id"],
@@ -125,10 +120,6 @@ def downgrade() -> None:
     )
     op.drop_index(
         "ix_remnawave_migration_decisions_user_id",
-        table_name="remnawave_migration_decisions",
-    )
-    op.drop_index(
-        "ix_remnawave_migration_decisions_subscription_id",
         table_name="remnawave_migration_decisions",
     )
     op.drop_table("remnawave_migration_decisions")
