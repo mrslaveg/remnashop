@@ -1,14 +1,17 @@
 from aiogram_dialog import Dialog, StartMode, Window
+from aiogram_dialog.widgets.input import MessageInput
 
 from src.core.enums import BannerName
 from src.telegram.states import Dashboard, DashboardRemnawaveMigration
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
-from aiogram_dialog.widgets.input import MessageInput
-
 from src.telegram.widgets.kbd import Button, Row, Start, SwitchTo
 
 from .getters import migration_getter
-from .handlers import on_migration_apply, on_migration_check, on_migration_decision_message
+from .handlers import (
+    on_migration_apply,
+    on_migration_check,
+    on_migration_decision_message,
+)
 
 main = Window(
     Banner(BannerName.DASHBOARD),
