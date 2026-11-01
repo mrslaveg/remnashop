@@ -52,9 +52,6 @@ echo "Asset initialization complete"
 echo "Applying database schema migrations"
 alembic -c src/infrastructure/database/alembic.ini upgrade head
 
-echo "Running Remnawave ID migration and verification"
-python scripts/remnawave_v3_migrate.py --apply --confirm REMNAWAVE_V3_LOCAL_DB_ONLY --report-file /tmp/remnawave-v3-migration-report.json
-
 if [ "${UVICORN_RELOAD_ENABLED:-false}" = "true" ]; then
     UVICORN_RELOAD_ARGS="--reload --reload-dir /opt/remnashop/src --reload-dir /opt/remnashop/assets --reload-include *.ftl"
     echo "Uvicorn will run with reload enabled"
