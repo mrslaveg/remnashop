@@ -48,12 +48,12 @@ class ToggleSubscriptionStatus(Interactor[int, SubscriptionStatus]):
             try:
                 if is_now_active:
                     await self.remnawave.enable_user(
-                        (subscription.remnawave_user_id or subscription.user_remna_id),
+                        (subscription.remnawave_user_id or (subscription.remnawave_user_id or subscription.user_remna_id)),
                         username=target_user.remna_name,
                     )
                 else:
                     await self.remnawave.disable_user(
-                        subscription.user_remna_id,
+                        (subscription.remnawave_user_id or subscription.user_remna_id),
                         username=target_user.remna_name,
                     )
             except Exception as e:
@@ -97,7 +97,7 @@ class DeleteSubscription(Interactor[int, None]):
         async with self.uow:
             try:
                 await self.remnawave.delete_user(
-                    subscription.user_remna_id,
+                    (subscription.remnawave_user_id or subscription.user_remna_id),
                     username=target_user.remna_name,
                 )
             except Exception as e:
@@ -149,7 +149,7 @@ class UpdateTrafficLimit(Interactor[UpdateTrafficLimitDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                uuid=(subscription.remnawave_user_id or subscription.user_remna_id),
                 subscription=subscription,
             )
 
@@ -195,7 +195,7 @@ class UpdateDeviceLimit(Interactor[UpdateDeviceLimitDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                uuid=(subscription.remnawave_user_id or subscription.user_remna_id),
                 subscription=subscription,
             )
             await self.uow.commit()
@@ -247,7 +247,7 @@ class ToggleInternalSquad(Interactor[ToggleInternalSquadDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                uuid=(subscription.remnawave_user_id or subscription.user_remna_id),
                 subscription=subscription,
             )
             await self.uow.commit()
@@ -298,7 +298,7 @@ class ToggleExternalSquad(Interactor[ToggleExternalSquadDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                uuid=(subscription.remnawave_user_id or subscription.user_remna_id),
                 subscription=subscription,
             )
             await self.uow.commit()
@@ -346,7 +346,7 @@ class AddSubscriptionDuration(Interactor[AddSubscriptionDurationDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                uuid=(subscription.remnawave_user_id or subscription.user_remna_id),
                 subscription=subscription,
             )
 
@@ -405,7 +405,7 @@ class DisableTrialSubscription(Interactor[ChannelMemberEventDto, Optional[UserDt
         async with self.uow:
             try:
                 await self.remnawave.disable_user(
-                    subscription.user_remna_id, username=user.remna_name
+                    (subscription.remnawave_user_id or subscription.user_remna_id), username=user.remna_name
                 )
             except Exception as e:
                 logger.error(
@@ -496,7 +496,7 @@ class EnableTrialSubscription(Interactor[ChannelMemberEventDto, Optional[UserDto
         async with self.uow:
             try:
                 await self.remnawave.enable_user(
-                    subscription.user_remna_id, username=user.remna_name
+                    (subscription.remnawave_user_id or subscription.user_remna_id), username=user.remna_name
                 )
             except Exception as e:
                 logger.error(
