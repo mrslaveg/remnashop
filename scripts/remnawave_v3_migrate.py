@@ -740,6 +740,7 @@ async def _apply_local_mapping(
     session_factory: async_sessionmaker[AsyncSession],
     original: list[LocalSubscription],
     matches: list[Match],
+    expected_decisions: dict[int, RemnawaveMigrationDecision],
 ) -> int:
     if any(match.status not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"} for match in matches):
         raise RuntimeError("Refusing to apply: report contains unresolved matches")
@@ -749,9 +750,6 @@ async def _apply_local_mapping(
         for match in matches
         if match.status == "matched" and match.panel_user_id is not None
     }
-    if not mappings:
-        return 0
-
     expected = {item.subscription_id: item for item in original}
     stmt = (
         select(Subscription, User)
@@ -766,6 +764,20 @@ async def _apply_local_mapping(
             # while the local ID mapping transaction is being committed.
             await session.execute(text("LOCK TABLE subscriptions IN SHARE ROW EXCLUSIVE MODE"))
             await session.execute(text("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"))
+            await session.execute(text("LOCK TABLE remnawave_migration_decisions IN SHARE ROW EXCLUSIVE MODE"))
+            current_decisions_result = await session.execute(select(RemnawaveMigrationDecision))
+            current_decisions = {item.subscription_id: item for item in current_decisions_result.scalars().all()}
+            if set(current_decisions) != set(expected_decisions):
+                raise RuntimeError("Administrator decisions changed during migration; retry dry-run")
+            for subscription_id, expected_decision in expected_decisions.items():
+                current_decision = current_decisions[subscription_id]
+                if (
+                    current_decision.source_fingerprint != expected_decision.source_fingerprint
+                    or current_decision.action != expected_decision.action
+                    or current_decision.remnawave_user_id != expected_decision.remnawave_user_id
+                    or current_decision.admin_telegram_id != expected_decision.admin_telegram_id
+                ):
+                    raise RuntimeError("Administrator decisions changed during migration; retry dry-run")
             result = await session.execute(stmt)
             locked = result.all()
             if len(locked) != len(expected) or {
@@ -783,6 +795,7 @@ async def _apply_local_mapping(
                     or subscription.url != snapshot.url
                     or user.current_subscription_id != snapshot.current_subscription_id
                     or user.telegram_id != snapshot.telegram_id
+                    or user.username != snapshot.username
                     or subscription.remnawave_user_id != snapshot.existing_panel_id
                 ):
                     raise RuntimeError(
@@ -1034,7 +1047,7 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
             return 3
 
         if apply:
-            changed = await _apply_local_mapping(session_factory, local, matches)
+            changed = await _apply_local_mapping(session_factory, local, matches, decisions)
             logger.success(
                 "Local migration committed: {} subscription(s) updated. Remnawave was read-only.",
                 changed,
