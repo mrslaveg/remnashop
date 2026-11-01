@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from adaptix import Retort
 from aiogram import Dispatcher
@@ -24,6 +24,7 @@ from src.application.events.system import RemnashopWelcomeEvent
 from src.application.use_cases.gateways.commands.payment import CreateDefaultPaymentGateway
 from src.application.use_cases.settings.commands.defaults import CreateDefaultSettings
 from src.core.config import AppConfig
+from src.core.constants import REMNAWAVE_MIGRATION_GUARD_KEY
 from src.core.exceptions import RemnawaveCompatibilityError
 from src.core.utils.i18n_helpers import i18n_format_seconds
 from src.core.utils.time import get_uptime
