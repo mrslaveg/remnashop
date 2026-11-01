@@ -405,7 +405,8 @@ class DisableTrialSubscription(Interactor[ChannelMemberEventDto, Optional[UserDt
         async with self.uow:
             try:
                 await self.remnawave.disable_user(
-                    (subscription.remnawave_user_id or subscription.user_remna_id), username=user.remna_name
+                    subscription.remnawave_user_id or subscription.user_remna_id,
+                    username=user.remna_name,
                 )
             except Exception as e:
                 logger.error(
@@ -496,7 +497,8 @@ class EnableTrialSubscription(Interactor[ChannelMemberEventDto, Optional[UserDto
         async with self.uow:
             try:
                 await self.remnawave.enable_user(
-                    (subscription.remnawave_user_id or subscription.user_remna_id), username=user.remna_name
+                    subscription.remnawave_user_id or subscription.user_remna_id,
+                    username=user.remna_name,
                 )
             except Exception as e:
                 logger.error(
