@@ -215,6 +215,11 @@ class DashboardRemnawave(StatesGroup):
     INBOUNDS = State()
 
 
+class DashboardRemnawaveMigration(StatesGroup):
+    MAIN = State()
+    CONFIRM = State()
+
+
 class DashboardImporter(StatesGroup):
     MAIN = State()
     FROM_XUI = State()
