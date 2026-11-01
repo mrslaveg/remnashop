@@ -55,6 +55,16 @@ jobs:
           src/telegram/routers/dashboard/users/user/getters.py
           src/telegram/routers/dashboard/importer/getters.py
           src/telegram/routers/dashboard/importer/handlers.py
+          src/telegram/routers/dashboard/remnawave_migration/dialog.py
+          src/telegram/routers/dashboard/remnawave_migration/getters.py
+          src/telegram/routers/dashboard/remnawave_migration/handlers.py
+          src/telegram/middlewares/migration_guard.py
+          src/telegram/middlewares/__init__.py
+          src/telegram/routers/extra/commands.py
+          src/telegram/routers/dashboard/dialog.py
+          src/telegram/routers/dashboard/__init__.py
+          src/telegram/routers/__init__.py
+          src/telegram/states.py
           src/telegram/routers/dashboard/remnashop/plans/getters.py
           src/telegram/routers/dashboard/remnashop/plans/handlers.py
           src/telegram/routers/dashboard/remnashop/plans/dialog.py
