@@ -36,6 +36,17 @@ jobs:
           git commit -m "chore: refresh uv lockfile for Remnawave v3"
           git push
 
+      - name: One-time Ruff import sort
+        run: |
+          uv run ruff check --select I --fix scripts/remnawave_v3_migrate.py
+          if ! git diff --quiet -- scripts/remnawave_v3_migrate.py; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add scripts/remnawave_v3_migrate.py
+            git commit -m "style(migration): sort imports"
+            git push
+          fi
+
       - name: Lint migrated files
         run: >-
           uv run ruff check
