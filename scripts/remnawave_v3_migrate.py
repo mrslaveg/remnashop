@@ -748,7 +748,7 @@ async def _apply_local_mapping(
     mappings = {
         match.subscription_id: match.panel_user_id
         for match in matches
-        if match.status == "matched" and match.panel_user_id is not None
+        if match.status in {"matched", "manually_mapped"} and match.panel_user_id is not None
     }
     expected = {item.subscription_id: item for item in original}
     stmt = (
