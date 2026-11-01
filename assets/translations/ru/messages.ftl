@@ -1539,6 +1539,46 @@ msg-subscription-failed =
 # Importer
 msg-importer-main = <b>📥 Импорт пользователей</b>
 
+msg-remnawave-migration-main =
+    <b>🔄 Миграция Remnawave v3</b>
+
+    Миграция переносит числовые ID пользователей панели в локальную БД Remnashop. Пользователи и подписки в Remnawave не изменяются — разрешены только GET-запросы.
+
+    <b>Версия панели</b>: { $panel_version }
+    <b>API-режим</b>: { $panel_api_line }
+    <b>Пользователей прочитано</b>: { $panel_users_read }
+    <b>Текущих подписок в боте</b>: { $local_current_subscriptions }
+
+    <b>Результат последней проверки</b>
+    <blockquote>
+    Совпадений: { $matched }
+    Уже перенесено: { $already_migrated }
+    Не найдено: { $unmatched }
+    Конфликтов: { $conflict }
+    Дубликатов: { $duplicate_local_mapping }
+    Конфликтов существующих ID: { $existing_id_conflict }
+    Других проблем: { $other_issues }
+    </blockquote>
+
+    <b>Статус</b>: { $result }
+
+    <b>Лог последнего запуска</b>:
+    <pre>{ $log }</pre>
+
+msg-remnawave-migration-confirm =
+    <b>⚠️ Подтверждение миграции</b>
+
+    Будут записаны только числовые ID в колонку <code>subscriptions.remnawave_user_id</code> локальной БД Remnashop.
+
+    Перед применением:
+    • Сделайте резервную копию PostgreSQL Remnashop.
+    • Не обновляйте панель между проверкой и применением.
+    • Убедитесь, что проверка завершилась без конфликтов.
+
+    Remnawave останется доступна только для чтения. Никакие пользователи, подписки, трафик, HWID или настройки панели не изменяются.
+
+    После подтверждения мигратор повторно проверит панель и локальные строки. При любом расхождении транзакция будет отменена.
+
 msg-importer-from-xui =
     <b>📥 Импорт пользователей (3X-UI)</b>
     
