@@ -1,9 +1,10 @@
 from aiogram import Dispatcher
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
+from starlette.middleware.base import RequestResponseEndpoint
 from starlette.middleware.cors import CORSMiddleware
 
 from src.__version__ import __version__
@@ -47,7 +48,9 @@ def get_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
     app.state.remnawave_migration_only = False
 
     @app.middleware("http")
-    async def migration_mode_http_guard(request, call_next):
+    async def migration_mode_http_guard(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         if not getattr(request.app.state, "remnawave_migration_only", False):
             return await call_next(request)
 
