@@ -28,7 +28,7 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
         MiddlewareEventType.PRE_CHECKOUT_QUERY,
     ]
 
-    async def middleware_logic(
+    async def middleware_logic(  # noqa: C901
         self,
         handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
         event: TelegramObject,
@@ -68,7 +68,10 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
             if (
                 dialog_state
                 and dialog_state.startswith("DashboardRemnawaveMigration:")
-                and action in {"migration_check", "migration_review", "migration_apply", "migration_confirm", "back"}
+                and action in {
+                    "migration_check", "migration_review", "migration_apply",
+                    "migration_confirm", "back",
+                }
             ):
                 return await handler(event, data)
 
