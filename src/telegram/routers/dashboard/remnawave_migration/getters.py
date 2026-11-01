@@ -35,7 +35,7 @@ async def migration_getter(
         "result": html.escape(dialog_manager.dialog_data.get("migration_result", "")),
         "issues_total": dialog_manager.dialog_data.get("migration_issues_total", 0),
         "issues": html.escape(
-            "\\n".join(dialog_manager.dialog_data.get("migration_issues", []))
+            "\n".join(dialog_manager.dialog_data.get("migration_issues", []))
             or "Проблемных записей нет."
         ),
     }
