@@ -43,8 +43,8 @@ async def _run_migration(apply: bool) -> tuple[int, dict[str, Any], str]:
 
     process = await asyncio.create_subprocess_exec(
         *command,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
     )
     try:
         output, _ = await asyncio.wait_for(process.communicate(), timeout=900)
