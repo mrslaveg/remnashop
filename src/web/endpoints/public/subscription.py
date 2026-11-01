@@ -143,7 +143,8 @@ async def get_current_subscription(
         return None
 
     remna_user = await remnawave.get_user_by_uuid(
-        current_subscription.user_remna_id, username=user.remna_name
+        current_subscription.remnawave_user_id or current_subscription.user_remna_id,
+        username=user.remna_name,
     )
 
     return SubscriptionInfoResponse(
@@ -175,7 +176,8 @@ async def get_subscription_devices(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
 
     devices = await remnawave.get_devices(
-        current_subscription.user_remna_id, username=user.remna_name
+        current_subscription.remnawave_user_id or current_subscription.user_remna_id,
+        username=user.remna_name,
     )
     return DevicesResponse(
         devices=[_to_device_response(device) for device in devices],
