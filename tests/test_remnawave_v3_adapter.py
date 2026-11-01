@@ -1,16 +1,12 @@
-import os
 from datetime import datetime, timezone
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
 
 from src.core.types import RemnaUserView
-
-os.environ.setdefault("BOT_TOKEN", "123456789:unit-test-token")
-os.environ.setdefault("BOT_SECRET_TOKEN", "unit-test-secret-token")
-os.environ.setdefault("BOT_OWNER_ID", "1")
-os.environ.setdefault("BOT_SUPPORT_USERNAME", "@support_test")
 
 
 def test_v3_user_view_uses_vless_uuid_as_subscription_identifier() -> None:
@@ -58,9 +54,19 @@ class _FakeSDK:
 
 
 def _build_adapter(users: list[SimpleNamespace]):
-    from src.infrastructure.services.remnawave import RemnawaveImpl  # noqa: PLC0415
-
-    return RemnawaveImpl(_FakeSDK(users))  # type: ignore[arg-type]
+    module_path = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "infrastructure"
+        / "services"
+        / "remnawave.py"
+    )
+    spec = spec_from_file_location("_remnawave_impl_under_test", module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load Remnawave adapter from '{module_path}'")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.RemnawaveImpl(_FakeSDK(users))  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
