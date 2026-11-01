@@ -217,7 +217,7 @@ async def on_migration_check(
         dialog_manager.dialog_data["migration_full_matches"] = report.get("matches", [])
         dialog_manager.dialog_data["migration_issues_total"] = sum(
             count for status, count in report.get("summary", {}).items()
-            if status not in {"matched", "already_migrated", "skipped_by_admin"}
+            if status not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"}
         )
         clean = code == 0 and _is_clean(report)
         dialog_manager.dialog_data["migration_can_apply"] = clean
