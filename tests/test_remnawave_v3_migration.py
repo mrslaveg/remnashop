@@ -7,7 +7,9 @@ from packaging.version import Version
 
 from scripts.remnawave_v3_migrate import (
     LocalSubscription,
+    Match,
     _allow_get_only,
+    _apply_admin_decisions,
     _build_report,
     _build_v2_report,
     _fetch_panel_users_v2,
@@ -17,6 +19,7 @@ from scripts.remnawave_v3_migrate import (
     _panel_api_line,
     _panel_snapshot_fingerprint,
     _short_uuid_from_url,
+    _source_fingerprint,
 )
 
 
@@ -278,6 +281,62 @@ def test_v2_duplicate_legacy_uuid_mapping_is_blocked():
     assert {match.status for match in matches} == {"duplicate_local_mapping"}
 
 
+
+
+def test_admin_skip_decision_resolves_unmatched_row_without_panel_id():
+    source = local("https://sub.example/", telegram_id=None)
+    original = _build_v2_report([source], [])
+    decision = SimpleNamespace(
+        subscription_id=source.subscription_id,
+        user_id=source.user_id,
+        legacy_uuid=source.legacy_uuid,
+        source_fingerprint=_source_fingerprint(source),
+        action="skip",
+        remnawave_user_id=None,
+        admin_telegram_id=1001,
+    )
+
+    result = _apply_admin_decisions([source], original, {source.subscription_id: decision})
+
+    assert result[0].status == "skipped_by_admin"
+    assert result[0].panel_user_id is None
+
+
+def test_admin_manual_mapping_resolves_unmatched_row():
+    source = local("https://sub.example/", telegram_id=None)
+    original = _build_v2_report([source], [])
+    decision = SimpleNamespace(
+        subscription_id=source.subscription_id,
+        user_id=source.user_id,
+        legacy_uuid=source.legacy_uuid,
+        source_fingerprint=_source_fingerprint(source),
+        action="manual_map",
+        remnawave_user_id=987654,
+        admin_telegram_id=1001,
+    )
+
+    result = _apply_admin_decisions([source], original, {source.subscription_id: decision})
+
+    assert result[0].status == "manually_mapped"
+    assert result[0].panel_user_id == 987654
+
+
+def test_admin_decision_with_changed_source_fingerprint_is_stale():
+    source = local("https://sub.example/", telegram_id=None)
+    original = _build_v2_report([source], [])
+    decision = SimpleNamespace(
+        subscription_id=source.subscription_id,
+        user_id=source.user_id,
+        legacy_uuid=source.legacy_uuid,
+        source_fingerprint="0" * 64,
+        action="skip",
+        remnawave_user_id=None,
+        admin_telegram_id=1001,
+    )
+
+    result = _apply_admin_decisions([source], original, {source.subscription_id: decision})
+
+    assert result[0].status == "decision_stale"
 
 
 @pytest.mark.asyncio
