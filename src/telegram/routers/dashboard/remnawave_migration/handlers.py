@@ -66,6 +66,23 @@ async def _run_migration(apply: bool) -> tuple[int, dict[str, Any], str]:
     return int(process.returncode or 0), report, log_tail
 
 
+def _format_issues(report: dict[str, Any]) -> list[str]:
+    unresolved = [
+        match for match in report.get("matches", [])
+        if match.get("status") not in {"matched", "already_migrated"}
+    ]
+    formatted = []
+    for match in unresolved[:10]:
+        details = match.get("details") or "Требуется ручная проверка."
+        candidates = match.get("candidate_panel_ids") or []
+        candidate_text = f"; кандидаты: {candidates}" if candidates else ""
+        formatted.append(
+            f"Подписка #{match.get('subscription_id')}: "
+            f"{match.get('status')} — {details}{candidate_text}"
+        )
+    return formatted
+
+
 def _is_clean(report: dict[str, Any]) -> bool:
     summary = report.get("summary", {})
     unresolved = sum(
@@ -108,6 +125,11 @@ async def on_migration_check(
             key: value for key, value in report.items() if key != "matches"
         }
         dialog_manager.dialog_data["migration_log"] = log
+        dialog_manager.dialog_data["migration_issues"] = _format_issues(report)
+        dialog_manager.dialog_data["migration_issues_total"] = sum(
+            count for status, count in report.get("summary", {}).items()
+            if status not in {"matched", "already_migrated"}
+        )
         clean = code == 0 and _is_clean(report)
         dialog_manager.dialog_data["migration_can_apply"] = clean
         dialog_manager.dialog_data["migration_result"] = (
@@ -158,6 +180,11 @@ async def on_migration_apply(
             key: value for key, value in report.items() if key != "matches"
         }
         dialog_manager.dialog_data["migration_log"] = log
+        dialog_manager.dialog_data["migration_issues"] = _format_issues(report)
+        dialog_manager.dialog_data["migration_issues_total"] = sum(
+            count for status, count in report.get("summary", {}).items()
+            if status not in {"matched", "already_migrated"}
+        )
         if code == 0:
             dialog_manager.dialog_data["migration_result"] = (
                 "Локальная миграция завершена. Проверьте итоговый отчёт и резервную копию."
