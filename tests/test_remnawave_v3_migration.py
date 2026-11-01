@@ -13,6 +13,7 @@ from scripts.remnawave_v3_migrate import (
     _fetch_panel_version,
      _index_panel_users,
     _match_subscription,
+    _panel_api_line,
     _panel_snapshot_fingerprint,
     _short_uuid_from_url,
 )
@@ -53,6 +54,28 @@ def panel(
         username=username,
         vless_uuid=vless_uuid,
     )
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("2.7.4", "v2_legacy_uuid_lookup"),
+        ("2.8.0", "v2_legacy_uuid_lookup"),
+        ("2.8.1", "v2_legacy_uuid_lookup"),
+        ("3.0.0", "v3_users_stream"),
+    ],
+)
+def test_panel_version_selects_correct_user_identity_contract(version, expected):
+    from packaging.version import Version
+
+    assert _panel_api_line(Version(version)) == expected
+
+
+def test_panel_version_between_api_generations_is_rejected():
+    from packaging.version import Version
+
+    with pytest.raises(RuntimeError, match="not supported"):
+        _panel_api_line(Version("2.9.0"))
 
 
 def test_extracts_short_uuid_from_subscription_path():
