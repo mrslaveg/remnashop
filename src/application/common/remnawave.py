@@ -13,6 +13,8 @@ from src.application.dto import (
 )
 from src.core.types import RemnaUserView
 
+RemnaUserId = Union[UUID, int]
+
 T = TypeVar("T", SubscriptionDto, RemnaSubscriptionDto)
 
 
@@ -29,20 +31,20 @@ class Remnawave(Protocol):
     async def update_user(
         self,
         user: UserDto,
-        uuid: UUID,
+        uuid: RemnaUserId,
         plan: Optional[PlanSnapshotDto] = None,
         subscription: Optional[SubscriptionDto] = None,
         reset_traffic: bool = False,
     ) -> RemnaUserView: ...
 
-    async def enable_user(self, uuid: UUID, *, username: Optional[str] = None) -> None: ...
+    async def enable_user(self, uuid: RemnaUserId, *, username: Optional[str] = None) -> None: ...
 
-    async def disable_user(self, uuid: UUID, *, username: Optional[str] = None) -> None: ...
+    async def disable_user(self, uuid: RemnaUserId, *, username: Optional[str] = None) -> None: ...
 
-    async def delete_user(self, uuid: UUID, *, username: Optional[str] = None) -> bool: ...
+    async def delete_user(self, uuid: RemnaUserId, *, username: Optional[str] = None) -> bool: ...
 
     async def get_user_by_uuid(
-        self, uuid: UUID, *, username: Optional[str] = None
+        self, uuid: RemnaUserId, *, username: Optional[str] = None
     ) -> Optional[RemnaUserView]: ...
 
     async def get_users_by_telegram_id(self, telegram_id: int) -> List[RemnaUserView]: ...
