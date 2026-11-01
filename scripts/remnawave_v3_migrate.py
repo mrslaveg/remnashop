@@ -838,6 +838,107 @@ def _summary(matches: list[Match]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+async def record_admin_decision(
+    subscription_id: int,
+    action: str,
+    admin_telegram_id: int,
+    panel_user_id: Optional[int] = None,
+) -> None:
+    """Persist an explicitly reviewed mapping/skip and append an audit event."""
+    if action not in {"manual_map", "skip"}:
+        raise ValueError("Decision action must be manual_map or skip")
+    if action == "manual_map" and (panel_user_id is None or panel_user_id <= 0):
+        raise ValueError("Manual mapping requires a positive numeric Remnawave ID")
+    if action == "skip" and panel_user_id is not None:
+        raise ValueError("Skip decision must not contain a panel ID")
+
+    config = AppConfig.get()
+    engine = create_async_engine(config.database.dsn, pool_pre_ping=True)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            async with session.begin():
+                stmt = (
+                    select(Subscription, User)
+                    .join(User, User.current_subscription_id == Subscription.id)
+                    .where(Subscription.id == subscription_id)
+                    .with_for_update()
+                )
+                row = (await session.execute(stmt)).first()
+                if row is None:
+                    raise ValueError("Subscription is not a current local subscription")
+                subscription, user = row
+                local = LocalSubscription(
+                    subscription_id=subscription.id,
+                    user_id=user.id,
+                    telegram_id=user.telegram_id,
+                    username=user.username,
+                    legacy_uuid=str(subscription.user_remna_id),
+                    url=subscription.url,
+                    current_subscription_id=user.current_subscription_id,
+                    existing_panel_id=subscription.remnawave_user_id,
+                )
+                fingerprint = _source_fingerprint(local)
+
+                if action == "manual_map":
+                    existing_subscription = await session.scalar(
+                        select(Subscription.id).where(
+                            Subscription.remnawave_user_id == panel_user_id,
+                            Subscription.id != subscription_id,
+                        ).limit(1)
+                    )
+                    existing_decision = await session.scalar(
+                        select(RemnawaveMigrationDecision.subscription_id).where(
+                            RemnawaveMigrationDecision.remnawave_user_id == panel_user_id,
+                            RemnawaveMigrationDecision.subscription_id != subscription_id,
+                        ).limit(1)
+                    )
+                    if existing_subscription is not None or existing_decision is not None:
+                        raise ValueError(
+                            f"Remnawave ID {panel_user_id} is already assigned to another local user"
+                        )
+
+                decision = await session.scalar(
+                    select(RemnawaveMigrationDecision)
+                    .where(RemnawaveMigrationDecision.subscription_id == subscription_id)
+                    .with_for_update()
+                )
+                if decision is None:
+                    decision = RemnawaveMigrationDecision(
+                        subscription_id=subscription.id,
+                        user_id=user.id,
+                        legacy_uuid=local.legacy_uuid,
+                        source_fingerprint=fingerprint,
+                        action=action,
+                        remnawave_user_id=panel_user_id,
+                        admin_telegram_id=admin_telegram_id,
+                    )
+                    session.add(decision)
+                else:
+                    decision.user_id = user.id
+                    decision.legacy_uuid = local.legacy_uuid
+                    decision.source_fingerprint = fingerprint
+                    decision.action = action
+                    decision.remnawave_user_id = panel_user_id
+                    decision.admin_telegram_id = admin_telegram_id
+                    decision.note = None
+
+                session.add(
+                    RemnawaveMigrationAudit(
+                        subscription_id=subscription.id,
+                        user_id=user.id,
+                        legacy_uuid=local.legacy_uuid,
+                        source_fingerprint=fingerprint,
+                        action=action,
+                        remnawave_user_id=panel_user_id,
+                        admin_telegram_id=admin_telegram_id,
+                        details={"source": "admin_dialog"},
+                    )
+                )
+    finally:
+        await engine.dispose()
+
+
 async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> int:
     if apply and confirmation != CONFIRMATION:
         raise RuntimeError(
@@ -956,6 +1057,10 @@ def main() -> int:
             "The panel is strictly read-only; default operation is dry-run."
         )
     )
+    parser.add_argument("--decision-subscription", type=int, help="persist an administrator decision for a current subscription")
+    parser.add_argument("--decision-action", choices=("manual_map", "skip"))
+    parser.add_argument("--decision-panel-id", type=int)
+    parser.add_argument("--admin-telegram-id", type=int)
     parser.add_argument("--apply", action="store_true", help="write mappings to Remnashop DB only")
     parser.add_argument("--confirm", help="required literal confirmation when --apply is used")
     parser.add_argument(
@@ -966,6 +1071,16 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
+        if args.decision_subscription is not None:
+            if args.decision_action is None or args.admin_telegram_id is None:
+                parser.error("--decision-subscription requires --decision-action and --admin-telegram-id")
+            asyncio.run(record_admin_decision(
+                args.decision_subscription,
+                args.decision_action,
+                args.admin_telegram_id,
+                args.decision_panel_id,
+            ))
+            return 0
         return asyncio.run(run(args.apply, args.confirm, args.report_file))
     except Exception as error:
         logger.exception("Remnawave v3 ID migration aborted: {}", error)
