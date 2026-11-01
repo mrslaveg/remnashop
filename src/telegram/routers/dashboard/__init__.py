@@ -6,6 +6,7 @@ from . import (
     promocodes,
     remnashop,
     remnawave,
+    remnawave_migration,
     statistics,
     users,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "promocodes",
     "remnashop",
     "remnawave",
+    "remnawave_migration",
     "statistics",
     "users",
 ]
