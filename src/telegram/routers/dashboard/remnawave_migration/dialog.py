@@ -3,10 +3,12 @@ from aiogram_dialog import Dialog, StartMode, Window
 from src.core.enums import BannerName
 from src.telegram.states import Dashboard, DashboardRemnawaveMigration
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
+from aiogram_dialog.widgets.input import MessageInput
+
 from src.telegram.widgets.kbd import Button, Row, Start, SwitchTo
 
 from .getters import migration_getter
-from .handlers import on_migration_apply, on_migration_check
+from .handlers import on_migration_apply, on_migration_check, on_migration_decision_message
 
 main = Window(
     Banner(BannerName.DASHBOARD),
@@ -16,6 +18,16 @@ main = Window(
             text=I18nFormat("btn-remnawave-migration.check"),
             id="migration_check",
             on_click=on_migration_check,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-remnawave-migration.review"),
+            id="migration_review",
+            state=DashboardRemnawaveMigration.REVIEW,
+            when=lambda data, widget, manager: bool(
+                manager.dialog_data.get("migration_issues_total")
+            ),
         ),
     ),
     Row(
@@ -63,4 +75,21 @@ confirm = Window(
     getter=migration_getter,
 )
 
-router = Dialog(main, confirm)
+
+review = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-remnawave-migration-review"),
+    MessageInput(func=on_migration_decision_message),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back.general"),
+            id="back",
+            state=DashboardRemnawaveMigration.MAIN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardRemnawaveMigration.REVIEW,
+    getter=migration_getter,
+)
+
+router = Dialog(main, review, confirm)
