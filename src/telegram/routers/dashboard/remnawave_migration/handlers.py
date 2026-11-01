@@ -57,7 +57,7 @@ async def _run_migration(apply: bool) -> tuple[int, dict[str, Any], str]:
     log_path.write_text(log, encoding="utf-8")
     if not report_path.exists():
         raise RuntimeError(
-            "Мигратор не создал JSON-отчёт. Последние сообщения:\n" + log[-2500:]
+            "Мигратор не создал JSON-отчёт. Последние сообщения:\n" + log[-1200:]
         )
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -72,10 +72,10 @@ def _format_issues(report: dict[str, Any]) -> list[str]:
         if match.get("status") not in {"matched", "already_migrated"}
     ]
     formatted = []
-    for match in unresolved[:10]:
-        details = match.get("details") or "Требуется ручная проверка."
+    for match in unresolved[:5]:
+        details = (match.get("details") or "Требуется ручная проверка.")[:180]
         candidates = match.get("candidate_panel_ids") or []
-        candidate_text = f"; кандидаты: {candidates}" if candidates else ""
+        candidate_text = f"; кандидаты: {candidates[:10]}" if candidates else ""
         formatted.append(
             f"Подписка #{match.get('subscription_id')}: "
             f"{match.get('status')} — {details}{candidate_text}"
