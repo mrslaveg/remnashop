@@ -7,8 +7,8 @@ from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 
 from src.application.common import BotService, Notifier, TranslatorRunner
-from src.application.common.policy import Permission, PermissionPolicy
 from src.application.common.dao import SettingsDao
+from src.application.common.policy import Permission, PermissionPolicy
 from src.application.dto import MessagePayloadDto, TelegramUserDto
 from src.core.enums import Command
 from src.telegram.keyboards import get_contact_support_keyboard
