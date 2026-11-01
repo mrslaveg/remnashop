@@ -26,8 +26,8 @@ async def migration_getter(
         "other_issues": sum(
             count for status, count in summary.items()
             if status not in {
-                "matched", "already_migrated", "unmatched", "conflict",
-                "duplicate_local_mapping", "existing_id_conflict",
+                "matched", "already_migrated", "manually_mapped", "skipped_by_admin",
+                "unmatched", "conflict", "duplicate_local_mapping", "existing_id_conflict",
             }
         ),
         "can_apply": bool(dialog_manager.dialog_data.get("migration_can_apply")),
