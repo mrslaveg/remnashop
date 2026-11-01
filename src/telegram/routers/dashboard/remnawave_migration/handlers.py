@@ -111,7 +111,7 @@ def _is_authorized(user: TelegramUserDto) -> bool:
     return PermissionPolicy.has_permission(user, Permission.VIEW_IMPORTER)
 
 
-async def on_migration_decision_message(
+async def on_migration_decision_message(  # noqa: C901
     message: Message,
     widget: MessageInput,
     dialog_manager: DialogManager,
