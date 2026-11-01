@@ -1020,6 +1020,15 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
             "local_current_subscriptions": len(local),
             "summary": summary,
             "matches": [asdict(match) for match in matches],
+            "local_identities": {
+                str(item.subscription_id): {
+                    "telegram_id": item.telegram_id,
+                    "username": item.username,
+                    "user_id": item.user_id,
+                    "legacy_uuid": item.legacy_uuid,
+                }
+                for item in local
+            },
             "panel_write_requests_allowed": False,
             "admin_decisions_loaded": len(decisions),
         }
