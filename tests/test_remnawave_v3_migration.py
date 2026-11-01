@@ -17,7 +17,12 @@ from scripts.remnawave_v3_migrate import (
 )
 
 
-def local(url: str, telegram_id: int | None = 123, legacy_uuid: str | None = None):
+def local(
+    url: str,
+    telegram_id: int | None = 123,
+    legacy_uuid: str | None = None,
+    existing_panel_id: int | None = None,
+):
     return LocalSubscription(
         subscription_id=10,
         user_id=2,
@@ -26,7 +31,7 @@ def local(url: str, telegram_id: int | None = 123, legacy_uuid: str | None = Non
         legacy_uuid=legacy_uuid or str(uuid4()),
         url=url,
         current_subscription_id=10,
-        existing_panel_id=None,
+        existing_panel_id=existing_panel_id,
     )
 
 
@@ -61,6 +66,58 @@ def test_strong_subscription_token_resolves_user_even_without_telegram_id():
     )
     assert match.status == "matched"
     assert match.panel_user_id == 321
+
+
+def test_v3_verifies_previously_migrated_mapping_by_numeric_id():
+    source = local("https://sub.example/", existing_panel_id=321)
+    remote = panel(321, telegram_id=123)
+
+    match = _build_report([source], [remote])[0]
+
+    assert match.status == "already_migrated"
+    assert match.panel_user_id == 321
+    assert "numeric_panel_id" in match.evidence
+    assert "telegram_id" in match.evidence
+
+
+def test_v3_rejects_migrated_id_with_conflicting_telegram_identity():
+    source = local("https://sub.example/", existing_panel_id=321)
+    remote = panel(321, telegram_id=999)
+
+    match = _build_report([source], [remote])[0]
+
+    assert match.status == "existing_id_conflict"
+    assert match.panel_user_id is None
+    assert match.candidate_panel_ids == (321,)
+
+
+def test_v3_rejects_migrated_id_missing_from_panel_stream():
+    source = local("https://sub.example/", existing_panel_id=321)
+
+    match = _build_report([source], [panel(654, telegram_id=123)])[0]
+
+    assert match.status == "existing_id_conflict"
+    assert match.panel_user_id is None
+    assert match.candidate_panel_ids == (321,)
+
+
+def test_v3_duplicate_existing_numeric_mapping_is_blocked():
+    first = local("https://sub.example/a", existing_panel_id=321)
+    second = LocalSubscription(
+        subscription_id=11,
+        user_id=3,
+        telegram_id=456,
+        username="bob",
+        legacy_uuid=str(uuid4()),
+        url="https://sub.example/b",
+        current_subscription_id=11,
+        existing_panel_id=321,
+    )
+    remote = panel(321, telegram_id=123)
+
+    matches = _build_report([first, second], [remote])
+
+    assert {item.status for item in matches} == {"duplicate_local_mapping"}
 
 
 def test_telegram_and_username_must_agree_without_subscription_token():
