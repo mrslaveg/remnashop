@@ -40,7 +40,10 @@ class CheckSubscriptionSyncState(Interactor[int, bool]):
 
         remna_user = None
         if bot_sub:
-            remna_user = await self.remnawave.get_user_by_uuid(bot_sub.user_remna_id, username=target_user.remna_name)
+            remna_user = await self.remnawave.get_user_by_uuid(
+                bot_sub.remnawave_user_id or bot_sub.user_remna_id,
+                username=target_user.remna_name,
+            )
         elif target_user.telegram_id:
             remna_users = await self.remnawave.get_users_by_telegram_id(target_user.telegram_id)
             remna_user = remna_users[0] if remna_users else None
@@ -96,7 +99,10 @@ class SyncSubscriptionFromRemnawave(Interactor[int, None]):
                 logger.info(f"{actor.log} Imported subscription from panel for user '{user_id}'")
                 return
 
-            remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id, username=target_user.remna_name)
+            remna_user = await self.remnawave.get_user_by_uuid(
+                subscription.remnawave_user_id or subscription.user_remna_id,
+                username=target_user.remna_name,
+            )
 
             if not remna_user:
                 await self.subscription_dao.update_status(
@@ -148,18 +154,24 @@ class SyncSubscriptionFromRemnashop(Interactor[int, None]):
                         target_user.telegram_id
                     )
                     if remna_users:
-                        await self.remnawave.delete_user(remna_users[0].uuid, username=getattr(remna_users[0], "username", None))
+                        await self.remnawave.delete_user(
+                            int(remna_users[0].id),
+                            username=getattr(remna_users[0], "username", None),
+                        )
                         logger.info(
                             f"{actor.log} Deleted user '{remna_users[0].uuid}' from Remnawave "
                             f"due to missing local subscription"
                         )
             else:
-                remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id, username=target_user.remna_name)
+                remna_user = await self.remnawave.get_user_by_uuid(
+                subscription.remnawave_user_id or subscription.user_remna_id,
+                username=target_user.remna_name,
+            )
 
                 if remna_user:
                     await self.remnawave.update_user(
                         user=target_user,
-                        uuid=subscription.user_remna_id,
+                        uuid=(subscription.remnawave_user_id or subscription.user_remna_id),
                         subscription=subscription,
                     )
                     logger.info(
