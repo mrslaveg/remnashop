@@ -72,18 +72,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             missing_panel_ids = await subscription_dao.get_current_missing_remnawave_ids()
             if missing_panel_ids:
                 sample_ids = ", ".join(str(value) for value in missing_panel_ids[:10])
-                raise RuntimeError(
-                    "Refusing to start Remnashop with Remnawave v3: "
-                    f"{len(missing_panel_ids)} current subscription(s) have no "
-                    "numeric remnawave_user_id. Complete the Remnawave migration "
-                    "from the admin dashboard while the panel is still on v2.7/v2.8, "
-                    "or run scripts/remnawave_v3_migrate.py as a controlled recovery. "
-                    f"Subscription ID sample: {sample_ids}"
+                logger.critical(
+                    "Remnawave v{} is connected, but {} current subscription(s) "
+                    "have no numeric remnawave_user_id. Starting in restricted "
+                    "migration mode: Telegram middleware permits only authorized "
+                    "administrators to open the migration screen. Sample subscription IDs: {}",
+                    panel_version,
+                    len(missing_panel_ids),
+                    sample_ids,
                 )
-            logger.info(
-                f"Remnawave v{panel_version} connected; all current subscriptions "
-                "have numeric panel IDs"
-            )
+            else:
+                logger.info(
+                    f"Remnawave v{panel_version} connected; all current subscriptions "
+                    "have numeric panel IDs"
+                )
         create_default_payment_gateway = await startup_container.get(CreateDefaultPaymentGateway)
         create_default_settings = await startup_container.get(CreateDefaultSettings)
         redis = await startup_container.get(Redis)
