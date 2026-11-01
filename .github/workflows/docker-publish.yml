@@ -3,12 +3,12 @@ name: Build and publish Docker image
 on:
   push:
     branches:
-      - feat/remnashop-v3
+      - feat/remnawave-v3
     tags:
       - "v*"
   pull_request:
     branches:
-      - feat/remnashop-v3
+      - feat/remnawave-v3
   workflow_dispatch:
 
 permissions:
@@ -43,7 +43,7 @@ jobs:
         with:
           images: ghcr.io/mrslaveg/remnashop
           tags: |
-            type=raw,value=remnashop-v3,enable=${{ github.ref == 'refs/heads/feat/remnashop-v3' }}
+            type=raw,value=remnashop-v3,enable=${{ github.ref == 'refs/heads/feat/remnawave-v3' }}
             type=ref,event=tag
             type=sha,prefix=sha-
 
