@@ -41,8 +41,6 @@ class RemnawaveImpl(Remnawave):
         self.sdk = sdk
         # VLESS UUID -> numeric panel id
         self._user_ids: dict[UUID, int] = {}
-        # username -> numeric panel id (fast path, one API call)
-        self._username_ids: dict[str, int] = {}
         self._user_ids_loaded = False
 
     @staticmethod
@@ -72,24 +70,7 @@ class RemnawaveImpl(Remnawave):
         except (AttributeError, TypeError, ValueError):
             pass
 
-        username = getattr(user, "username", None) or getattr(payload, "username", None)
-        if username:
-            self._username_ids[str(username)] = numeric_id
-
         return user
-
-    async def _resolve_by_username(self, username: str) -> Optional[int]:
-        cached = self._username_ids.get(username)
-        if cached is not None:
-            return cached
-        try:
-            payload = await self.sdk.users.get_user_by_username(username)
-        except Exception as error:
-            if self._not_found(error):
-                return None
-            raise
-        self._remember(payload)
-        return self._username_ids.get(username)
 
     async def _load_user_id_cache(self) -> None:
         if self._user_ids_loaded:
@@ -108,10 +89,7 @@ class RemnawaveImpl(Remnawave):
             cursor = next_cursor
 
         self._user_ids_loaded = True
-        logger.debug(
-            f"Remnawave id cache loaded: {len(self._user_ids)} by vless uuid, "
-            f"{len(self._username_ids)} by username"
-        )
+        logger.debug(f"Remnawave id cache loaded: {len(self._user_ids)} by VLESS UUID")
 
     async def _resolve_user_id(
         self,
@@ -128,22 +106,16 @@ class RemnawaveImpl(Remnawave):
         if cached is not None:
             return cached
 
-        # Fast path: panel still supports lookup by username (rs_<telegram_id>).
-        if username:
-            by_name = await self._resolve_by_username(username)
-            if by_name is not None:
-                # Link VLESS uuid from the remembered user when available.
-                self._user_ids.setdefault(key, by_name)
-                return by_name
-
-        # Last resort: one full stream pass, then cache for the process lifetime.
+        # UUIDs are accepted only when the exact VLESS UUID was observed in a
+        # panel response together with its numeric ID. A local legacy panel UUID
+        # must never be associated by username: imported users can have arbitrary
+        # names, and a wrong match could target another panel user.
         await self._load_user_id_cache()
         cached = self._user_ids.get(key)
-        if cached is None and username:
-            cached = self._username_ids.get(username)
         if cached is None:
             raise LookupError(
-                f"Remnawave user not found (vless_uuid={key}, username={username!r})"
+                f"Remnawave user not found by exact VLESS UUID '{key}'. "
+                "A numeric remnawave_user_id is required for migrated subscriptions."
             )
         return cached
 
@@ -239,12 +211,6 @@ class RemnawaveImpl(Remnawave):
                 return False
             raise
         self._user_ids.pop(UUID(str(uuid)), None) if isinstance(uuid, UUID) else None
-        if username:
-            self._username_ids.pop(username, None)
-        else:
-            for name, numeric_id in list(self._username_ids.items()):
-                if numeric_id == user_id:
-                    self._username_ids.pop(name, None)
         logger.info(f"Remnawave user '{uuid}' deleted")
         return True
 
