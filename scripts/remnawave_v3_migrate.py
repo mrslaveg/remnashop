@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import hashlib
 import re
 import sys
 from collections import defaultdict
@@ -28,6 +29,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.core.config import AppConfig
+from src.infrastructure.database.models.remnawave_migration import RemnawaveMigrationDecision
 from src.infrastructure.database.models.subscription import Subscription
 from src.infrastructure.database.models.user import User
 
@@ -414,6 +416,82 @@ async def _load_local_subscriptions(
     return locals_
 
 
+def _source_fingerprint(local: LocalSubscription) -> str:
+    """Fingerprint identity-bearing local fields; decisions expire when any change."""
+    payload = {
+        "subscription_id": local.subscription_id,
+        "user_id": local.user_id,
+        "legacy_uuid": local.legacy_uuid.lower(),
+        "telegram_id": local.telegram_id,
+        "username": (local.username or "").casefold(),
+        "url": _normalize_url(local.url),
+        "current_subscription_id": local.current_subscription_id,
+    }
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+async def _load_migration_decisions(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> dict[int, RemnawaveMigrationDecision]:
+    async with session_factory() as session:
+        result = await session.execute(select(RemnawaveMigrationDecision))
+        return {item.subscription_id: item for item in result.scalars().all()}
+
+
+def _apply_admin_decisions(
+    local_subscriptions: list[LocalSubscription],
+    matches: list[Match],
+    decisions: dict[int, RemnawaveMigrationDecision],
+) -> list[Match]:
+    """Overlay only current, fingerprint-matching administrator decisions."""
+    locals_by_id = {item.subscription_id: item for item in local_subscriptions}
+    result = {item.subscription_id: item for item in matches}
+    for subscription_id, decision in decisions.items():
+        local = locals_by_id.get(subscription_id)
+        if local is None:
+            continue
+        match = result[subscription_id]
+        if decision.source_fingerprint != _source_fingerprint(local) or (
+            decision.user_id != local.user_id
+            or decision.legacy_uuid.lower() != local.legacy_uuid.lower()
+        ):
+            result[subscription_id] = Match(
+                subscription_id, local.user_id, None, "decision_stale",
+                match.evidence,
+                "Administrator decision no longer matches current local identity; review again",
+            )
+            continue
+        if decision.action == "skip":
+            result[subscription_id] = Match(
+                subscription_id, local.user_id, None, "skipped_by_admin",
+                ("admin_decision",), "Explicitly skipped by administrator",
+            )
+        elif decision.action == "manual_map" and decision.remnawave_user_id:
+            result[subscription_id] = Match(
+                subscription_id, local.user_id, decision.remnawave_user_id,
+                "manually_mapped", ("admin_verified_numeric_id",),
+                "Numeric Remnawave ID assigned manually by administrator",
+            )
+
+    # A panel ID may belong to only one current local subscription.
+    reverse: dict[int, list[Match]] = defaultdict(list)
+    for match in result.values():
+        if match.status in {"matched", "already_migrated", "manually_mapped"}:
+            if match.panel_user_id is not None:
+                reverse[match.panel_user_id].append(match)
+    duplicates = {panel_id for panel_id, rows in reverse.items() if len(rows) > 1}
+    for panel_id in duplicates:
+        for match in reverse[panel_id]:
+            result[match.subscription_id] = Match(
+                match.subscription_id, match.user_id, None, "duplicate_local_mapping",
+                match.evidence,
+                f"Panel user {panel_id} is assigned to multiple local current subscriptions",
+                (panel_id,),
+            )
+    return [result[item.subscription_id] for item in matches]
+
+
 def _match_existing_numeric_id(
     local: LocalSubscription,
     panel_user: Optional[Any],
@@ -587,7 +665,7 @@ def _mark_v2_duplicates_and_existing_ids(
 ) -> list[Match]:
     reverse: dict[int, list[Match]] = defaultdict(list)
     for match in matches:
-        if match.status == "matched" and match.panel_user_id is not None:
+        if match.status in {"matched", "manually_mapped"} and match.panel_user_id is not None:
             reverse[match.panel_user_id].append(match)
     duplicates = {
         panel_id for panel_id, items in reverse.items() if len(items) > 1
@@ -663,7 +741,7 @@ async def _apply_local_mapping(
     original: list[LocalSubscription],
     matches: list[Match],
 ) -> int:
-    if any(match.status not in {"matched", "already_migrated"} for match in matches):
+    if any(match.status not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"} for match in matches):
         raise RuntimeError("Refusing to apply: report contains unresolved matches")
 
     mappings = {
@@ -801,6 +879,8 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
             panel_users = await _fetch_panel_users_v3(sdk)
             matches = _build_report(local, panel_users)
 
+        decisions = await _load_migration_decisions(session_factory)
+        matches = _apply_admin_decisions(local, matches, decisions)
         panel_version = str(panel_version_value)
         summary = _summary(matches)
 
@@ -827,6 +907,7 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
             "summary": summary,
             "matches": [asdict(match) for match in matches],
             "panel_write_requests_allowed": False,
+            "admin_decisions_loaded": len(decisions),
         }
         report_file.write_text(
             json.dumps(report, ensure_ascii=False, indent=2),
@@ -835,7 +916,7 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
         sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
         unresolved = [
-            match for match in matches if match.status not in {"matched", "already_migrated"}
+            match for match in matches if match.status not in {"matched", "already_migrated", "skipped_by_admin"}
         ]
         if unresolved:
             logger.error(
