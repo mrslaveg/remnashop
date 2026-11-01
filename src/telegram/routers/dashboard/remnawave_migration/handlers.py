@@ -1,4 +1,5 @@
 import asyncio
+import html
 import json
 import sys
 from datetime import datetime, timezone
@@ -75,11 +76,11 @@ def _format_issues(report: dict[str, Any]) -> list[str]:
     formatted = []
     identities = report.get("local_identities", {})
     for match in unresolved[:10]:
-        details = (match.get("details") or "Требуется ручная проверка.")[:120]
+        details = html.escape((match.get("details") or "Требуется ручная проверка.")[:120])
         identity = identities.get(str(match.get("subscription_id")), {})
         account = (
             f"TG: {identity.get('telegram_id') or '—'}"
-            + (f" (@{identity['username']})" if identity.get("username") else "")
+            + (f" (@{html.escape(identity['username'])})" if identity.get("username") else "")
         )
         candidates = match.get("candidate_panel_ids") or []
         candidate_text = f"; кандидаты: {candidates[:10]}" if candidates else ""
@@ -94,7 +95,7 @@ def _is_clean(report: dict[str, Any]) -> bool:
     summary = report.get("summary", {})
     unresolved = sum(
         count for status, count in summary.items()
-        if status not in {"matched", "already_migrated", "skipped_by_admin"}
+        if status not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"}
     )
     return (
         report.get("panel_api_line") in {"v2_legacy_uuid_lookup", "v3_users_stream"}
