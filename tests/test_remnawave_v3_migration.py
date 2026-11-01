@@ -10,6 +10,7 @@ from scripts.remnawave_v3_migrate import (
     _build_report,
     _index_panel_users,
     _match_subscription,
+    _panel_snapshot_fingerprint,
     _short_uuid_from_url,
 )
 
@@ -81,6 +82,32 @@ def test_legacy_vless_uuid_alone_is_never_enough():
     assert match.status == "unmatched"
 
 
+def test_strong_subscription_token_with_conflicting_telegram_identity_is_rejected():
+    source = local("https://sub.example/api/sub/token-1", telegram_id=123)
+    match = _match_subscription(
+        source,
+        _index_panel_users(
+            [
+                panel(321, short_uuid="token-1", telegram_id=123, username="rs_123"),
+                panel(654, telegram_id=123, username="rs_other"),
+            ]
+        ),
+    )
+    assert match.status == "conflict"
+    assert match.candidate_panel_ids == (321, 654)
+
+
+def test_duplicate_numeric_panel_ids_abort_indexing():
+    with pytest.raises(ValueError, match="duplicate numeric ID"):
+        _index_panel_users([panel(321), panel(321)])
+
+
+def test_panel_snapshot_fingerprint_detects_identity_changes():
+    first = [panel(321, short_uuid="token-1", telegram_id=123, username="rs_123")]
+    changed = [panel(321, short_uuid="token-2", telegram_id=123, username="rs_123")]
+    assert _panel_snapshot_fingerprint(first) != _panel_snapshot_fingerprint(changed)
+
+
 def test_conflicting_telegram_and_username_are_rejected():
     source = local("https://sub.example/", telegram_id=123)
     match = _match_subscription(
@@ -116,8 +143,12 @@ def test_one_panel_user_cannot_be_assigned_to_two_local_subscriptions():
 
 
 @pytest.mark.asyncio
-async def test_panel_http_guard_allows_get_and_rejects_mutations():
-    await _allow_get_only(Request("GET", "https://panel.example/api/users"))
+async def test_panel_http_guard_only_allows_the_two_read_endpoints():
+    await _allow_get_only(Request("GET", "https://panel.example/api/system/metadata"))
+    await _allow_get_only(Request("GET", "https://panel.example/api/users/stream"))
 
-    with pytest.raises(PermissionError, match="blocked non-GET"):
-        await _allow_get_only(Request("POST", "https://panel.example/api/users"))
+    with pytest.raises(PermissionError, match="blocked"):
+        await _allow_get_only(Request("GET", "https://panel.example/api/users"))
+
+    with pytest.raises(PermissionError, match="blocked"):
+        await _allow_get_only(Request("POST", "https://panel.example/api/users/stream"))
