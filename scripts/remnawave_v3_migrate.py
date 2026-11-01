@@ -20,10 +20,9 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from httpx import AsyncClient, Request, Timeout
 from loguru import logger
 from packaging.version import Version
+from remnawave import RemnawaveSDK
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
-from remnawave import RemnawaveSDK
 
 from src.core.config import AppConfig
 from src.infrastructure.database.models.subscription import Subscription
@@ -100,7 +99,7 @@ def _as_int(value: Any) -> Optional[int]:
 def _index_panel_users(panel_users: list[Any]) -> dict[str, dict[Any, set[int]]]:
     indexes: dict[str, dict[Any, set[int]]] = {
         name: defaultdict(set)
-        for name in ("url", "short_uuid", "telegram_id", "username", "vless_uuid")
+        for name in ("url", "short_uuid", "telegram_id", "username")
     }
     for panel_user in panel_users:
         panel_id = _as_int(getattr(panel_user, "id", None))
@@ -111,7 +110,6 @@ def _index_panel_users(panel_users: list[Any]) -> dict[str, dict[Any, set[int]]]
         short_uuid = getattr(panel_user, "short_uuid", None)
         telegram_id = _as_int(getattr(panel_user, "telegram_id", None))
         username = getattr(panel_user, "username", None)
-        vless_uuid = getattr(panel_user, "vless_uuid", None)
 
         if url:
             indexes["url"][url].add(panel_id)
@@ -121,15 +119,13 @@ def _index_panel_users(panel_users: list[Any]) -> dict[str, dict[Any, set[int]]]
             indexes["telegram_id"][telegram_id].add(panel_id)
         if username:
             indexes["username"][str(username).strip().casefold()].add(panel_id)
-        if vless_uuid:
-            indexes["vless_uuid"][str(vless_uuid).strip().casefold()].add(panel_id)
     return indexes
 
 
-def _match_subscription(
+def _collect_identity_evidence(
     local: LocalSubscription,
     indexes: dict[str, dict[Any, set[int]]],
-) -> Match:
+) -> dict[str, set[int]]:
     evidence: dict[str, set[int]] = {}
 
     local_url = _normalize_url(local.url)
@@ -156,72 +152,98 @@ def _match_subscription(
     if found:
         evidence["username"] = set(found)
 
-    found = indexes["vless_uuid"].get(local.legacy_uuid.casefold(), set())
-    if found:
-        # Legacy UUID is corroborating evidence only; it is never a sole match key.
-        evidence["vless_uuid"] = set(found)
+    return evidence
 
-    strong_names = {"exact_url", "short_uuid"}
-    strong = [evidence[name] for name in strong_names if name in evidence]
-    if strong:
-        candidates = set.intersection(*strong)
-        if len(candidates) != 1:
-            state = "ambiguous" if candidates else "conflict"
-            return Match(
-                local.subscription_id,
-                local.user_id,
-                None,
-                state,
-                tuple(sorted(evidence)),
-                "Strong URL identifiers do not resolve to exactly one panel user",
-            )
-        candidate = next(iter(candidates))
-        for name, ids in evidence.items():
-            if len(ids) == 1 and candidate not in ids:
-                return Match(
-                    local.subscription_id,
-                    local.user_id,
-                    None,
-                    "conflict",
-                    tuple(sorted(evidence)),
-                    f"URL identifies panel user {candidate}, but {name} identifies {next(iter(ids))}",
-                )
-        return Match(
-            local.subscription_id,
-            local.user_id,
-            candidate,
-            "matched",
-            tuple(sorted(evidence)),
+
+def _match_from_evidence(
+    local: LocalSubscription,
+    evidence: dict[str, set[int]],
+    candidate: Optional[int],
+    status: str,
+    details: str,
+) -> Match:
+    return Match(
+        subscription_id=local.subscription_id,
+        user_id=local.user_id,
+        panel_user_id=candidate,
+        status=status,
+        evidence=tuple(sorted(evidence)),
+        details=details,
+    )
+
+
+def _match_strong_identifiers(
+    local: LocalSubscription,
+    evidence: dict[str, set[int]],
+) -> Optional[Match]:
+    strong = [evidence[name] for name in ("exact_url", "short_uuid") if name in evidence]
+    if not strong:
+        return None
+
+    candidates = set.intersection(*strong)
+    if len(candidates) != 1:
+        status = "ambiguous" if candidates else "conflict"
+        return _match_from_evidence(
+            local,
+            evidence,
+            None,
+            status,
+            "Strong URL identifiers do not resolve to exactly one panel user",
         )
 
-    if len(evidence) < 2:
-        return Match(
-            local.subscription_id,
-            local.user_id,
+    candidate = next(iter(candidates))
+    for name, ids in evidence.items():
+        if ids != {candidate}:
+            return _match_from_evidence(
+                local,
+                evidence,
+                None,
+                "conflict",
+                f"URL identifies panel user {candidate}, but {name} is not a unique match",
+            )
+
+    return _match_from_evidence(local, evidence, candidate, "matched", "")
+
+
+def _match_secondary_identifiers(
+    local: LocalSubscription,
+    evidence: dict[str, set[int]],
+) -> Match:
+    required = ("telegram_id", "username")
+    if any(name not in evidence for name in required):
+        return _match_from_evidence(
+            local,
+            evidence,
             None,
             "unmatched",
-            tuple(sorted(evidence)),
-            "No unique URL token; at least two independent identity signals are required",
+            "No unique subscription URL token; Telegram ID and username must both match",
         )
 
-    candidates = set.intersection(*evidence.values())
-    if len(candidates) != 1:
-        return Match(
-            local.subscription_id,
-            local.user_id,
+    candidates = set.intersection(*(evidence[name] for name in required))
+    if len(candidates) != 1 or any(
+        evidence[name] != candidates for name in required
+    ):
+        status = "ambiguous" if candidates else "conflict"
+        return _match_from_evidence(
+            local,
+            evidence,
             None,
-            "ambiguous" if candidates else "conflict",
-            tuple(sorted(evidence)),
-            "Identity signals do not resolve to exactly one panel user",
+            status,
+            "Telegram ID and username do not resolve to exactly one panel user",
         )
 
-    return Match(
-        local.subscription_id,
-        local.user_id,
-        next(iter(candidates)),
-        "matched",
-        tuple(sorted(evidence)),
-    )
+    return _match_from_evidence(local, evidence, next(iter(candidates)), "matched", "")
+
+
+def _match_subscription(
+    local: LocalSubscription,
+    indexes: dict[str, dict[Any, set[int]]],
+) -> Match:
+    evidence = _collect_identity_evidence(local, indexes)
+    strong_match = _match_strong_identifiers(local, evidence)
+    if strong_match is not None:
+        return strong_match
+    return _match_secondary_identifiers(local, evidence)
 
 
 async def _fetch_panel_users(sdk: RemnawaveSDK) -> tuple[list[Any], str]:
@@ -303,7 +325,7 @@ def _build_report(
                         None,
                         "duplicate_local_mapping",
                         match.evidence,
-                        f"Panel user {match.panel_user_id} matched multiple local current subscriptions",
+                        "Panel user " f"{match.panel_user_id} matched multiple local current subscriptions",
                     )
                 )
             else:
@@ -370,7 +392,9 @@ async def _apply_local_mapping(
             result = await session.execute(stmt)
             locked = result.all()
             if len(locked) != len(expected):
-                raise RuntimeError("Local current subscriptions changed during migration; retry dry-run")
+                raise RuntimeError(
+                    "Local current subscriptions changed during migration; retry dry-run"
+                )
 
             for subscription, user in locked:
                 snapshot = expected[subscription.id]
@@ -382,7 +406,8 @@ async def _apply_local_mapping(
                     or user.telegram_id != snapshot.telegram_id
                 ):
                     raise RuntimeError(
-                        f"Local subscription {subscription.id} changed during migration; no changes committed"
+                        f"Local subscription {subscription.id} changed during migration; "
+                        "no changes committed"
                     )
 
                 target_id = mappings.get(subscription.id)
@@ -464,7 +489,7 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
             json.dumps(report, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\\n")
 
         unresolved = [
             match for match in matches if match.status not in {"matched", "already_migrated"}
@@ -485,7 +510,8 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
             )
         else:
             logger.info(
-                "Dry-run successful. No data was changed. Re-run with --apply and confirmation to write local DB IDs."
+                "Dry-run successful. No data was changed. Re-run with --apply "
+                "and confirmation to write local DB IDs."
             )
         return 0
     finally:
