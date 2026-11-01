@@ -75,8 +75,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 raise RuntimeError(
                     "Refusing to start Remnashop with Remnawave v3: "
                     f"{len(missing_panel_ids)} current subscription(s) have no "
-                    "numeric remnawave_user_id. Run scripts/remnawave_v3_migrate.py "
-                    "and verify its report before starting the bot. "
+                    "numeric remnawave_user_id. Complete the Remnawave migration "
+                    "from the admin dashboard while the panel is still on v2.7/v2.8, "
+                    "or run scripts/remnawave_v3_migrate.py as a controlled recovery. "
                     f"Subscription ID sample: {sample_ids}"
                 )
             logger.info(
