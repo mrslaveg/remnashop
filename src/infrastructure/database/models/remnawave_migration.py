@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import BaseSql
@@ -26,7 +26,7 @@ class RemnawaveMigrationDecision(BaseSql, TimestampMixin):
             "uq_remnawave_migration_decisions_panel_id",
             "remnawave_user_id",
             unique=True,
-            postgresql_where="remnawave_user_id IS NOT NULL",
+            postgresql_where=text("remnawave_user_id IS NOT NULL"),
         ),
     )
 
@@ -34,7 +34,6 @@ class RemnawaveMigrationDecision(BaseSql, TimestampMixin):
     subscription_id: Mapped[int] = mapped_column(
         ForeignKey("subscriptions.id", ondelete="CASCADE"),
         unique=True,
-        index=True,
     )
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
