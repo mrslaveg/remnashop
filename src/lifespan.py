@@ -91,12 +91,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 )
         create_default_payment_gateway = await startup_container.get(CreateDefaultPaymentGateway)
         create_default_settings = await startup_container.get(CreateDefaultSettings)
-        app.state.remnawave_migration_only = bool(migration_only_mode)
         redis = await startup_container.get(Redis)
         if migration_only_mode is True:
             await redis.set(REMNAWAVE_MIGRATION_GUARD_KEY, "1")
         elif migration_only_mode is False:
             await redis.delete(REMNAWAVE_MIGRATION_GUARD_KEY)
+        app.state.remnawave_migration_only = bool(
+            await redis.get(REMNAWAVE_MIGRATION_GUARD_KEY)
+        )
         retort = await startup_container.get(Retort)
 
         if not await bot_service.is_inline_enabled():
