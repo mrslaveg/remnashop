@@ -12,6 +12,7 @@ from src.telegram.states import (
     DashboardPromocodes,
     DashboardRemnashop,
     DashboardRemnawave,
+    DashboardRemnawaveMigration,
     DashboardStatistics,
     DashboardUsers,
 )
@@ -93,6 +94,11 @@ dashboard = Window(
             text=I18nFormat("btn-dashboard.importer"),
             id="importer",
             state=DashboardImporter.MAIN,
+        ),
+        Start(
+            text=I18nFormat("btn-dashboard.remnawave-migration"),
+            id="remnawave_migration",
+            state=DashboardRemnawaveMigration.MAIN,
         ),
         when=require_permission(Permission.VIEW_IMPORTER),
     ),
