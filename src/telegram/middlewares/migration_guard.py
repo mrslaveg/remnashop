@@ -6,9 +6,14 @@ from aiogram_dialog.utils import remove_intent_id
 from dishka import AsyncContainer
 from loguru import logger
 from redis.asyncio import Redis
+
 from src.application.common.policy import Permission, PermissionPolicy
 from src.application.dto import TelegramUserDto
-from src.core.constants import CONTAINER_KEY, REMNAWAVE_MIGRATION_GUARD_KEY, USER_KEY
+from src.core.constants import (
+    CONTAINER_KEY,
+    REMNAWAVE_MIGRATION_GUARD_KEY,
+    USER_KEY,
+)
 from src.core.enums import MiddlewareEventType
 
 from .base import EventTypedMiddleware
