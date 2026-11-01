@@ -8,6 +8,7 @@ from scripts.remnawave_v3_migrate import (
     LocalSubscription,
     _allow_get_only,
     _build_report,
+    _build_v2_report,
     _index_panel_users,
     _match_subscription,
     _panel_snapshot_fingerprint,
@@ -142,13 +143,82 @@ def test_one_panel_user_cannot_be_assigned_to_two_local_subscriptions():
 
 
 
+def test_v2_exact_legacy_uuid_maps_numeric_id():
+    legacy_uuid = str(uuid4())
+    source = local("https://sub.example/sub/token-1", legacy_uuid=legacy_uuid)
+    remote = SimpleNamespace(uuid=legacy_uuid, id=987, telegram_id=123)
+    match = _build_v2_report([source], [remote])[0]
+
+    assert match.status == "matched"
+    assert match.panel_user_id == 987
+    assert set(match.evidence) == {"legacy_uuid", "telegram_id"}
+
+
+def test_v2_legacy_uuid_telegram_conflict_is_rejected():
+    legacy_uuid = str(uuid4())
+    source = local("https://sub.example/sub/token-1", legacy_uuid=legacy_uuid)
+    remote = SimpleNamespace(uuid=legacy_uuid, id=987, telegram_id=999)
+    match = _build_v2_report([source], [remote])[0]
+
+    assert match.status == "conflict"
+    assert match.panel_user_id is None
+    assert match.candidate_panel_ids == (987,)
+
+
+def test_v2_does_not_fallback_to_username_or_subscription_url():
+    source = local("https://sub.example/sub/token-1", legacy_uuid=str(uuid4()))
+    remote = SimpleNamespace(
+        uuid=str(uuid4()),
+        id=987,
+        telegram_id=123,
+        username="rs_123",
+        subscription_url=source.url,
+        short_uuid="token-1",
+    )
+    match = _build_v2_report([source], [remote])[0]
+
+    assert match.status == "unmatched"
+
+
+def test_v2_duplicate_legacy_uuid_mapping_is_blocked():
+    legacy_uuid = str(uuid4())
+    first = local("https://sub.example/sub/a", legacy_uuid=legacy_uuid)
+    second = LocalSubscription(
+        subscription_id=11,
+        user_id=3,
+        telegram_id=123,
+        username="bob",
+        legacy_uuid=legacy_uuid,
+        url="https://sub.example/sub/b",
+        current_subscription_id=11,
+        existing_panel_id=None,
+    )
+    remote = SimpleNamespace(uuid=legacy_uuid, id=987, telegram_id=123)
+    matches = _build_v2_report([first, second], [remote])
+
+    assert {match.status for match in matches} == {"duplicate_local_mapping"}
+
+
 @pytest.mark.asyncio
-async def test_panel_http_guard_only_allows_the_two_read_endpoints():
+async def test_panel_http_guard_allows_only_metadata_stream_and_uuid_lookup():
     await _allow_get_only(Request("GET", "https://panel.example/api/system/metadata"))
     await _allow_get_only(Request("GET", "https://panel.example/api/users/stream"))
+    await _allow_get_only(
+        Request("GET", f"https://panel.example/api/users/{uuid4()}")
+    )
 
     with pytest.raises(PermissionError, match="blocked"):
         await _allow_get_only(Request("GET", "https://panel.example/api/users"))
+
+    with pytest.raises(PermissionError, match="blocked"):
+        await _allow_get_only(
+            Request("GET", "https://panel.example/api/users/not-a-uuid")
+        )
+
+    with pytest.raises(PermissionError, match="blocked"):
+        await _allow_get_only(
+            Request("POST", f"https://panel.example/api/users/{uuid4()}")
+        )
 
     with pytest.raises(PermissionError, match="blocked"):
         await _allow_get_only(Request("POST", "https://panel.example/api/users/stream"))
