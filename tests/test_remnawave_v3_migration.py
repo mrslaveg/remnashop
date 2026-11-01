@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient, MockTransport, Request, Response
+from packaging.version import Version
 
 from scripts.remnawave_v3_migrate import (
     LocalSubscription,
@@ -66,14 +67,10 @@ def panel(
     ],
 )
 def test_panel_version_selects_correct_user_identity_contract(version, expected):
-    from packaging.version import Version
-
     assert _panel_api_line(Version(version)) == expected
 
 
 def test_panel_version_between_api_generations_is_rejected():
-    from packaging.version import Version
-
     with pytest.raises(RuntimeError, match="not supported"):
         _panel_api_line(Version("2.9.0"))
 
