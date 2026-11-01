@@ -6,10 +6,10 @@ from aiogram_dialog.utils import remove_intent_id
 from dishka import AsyncContainer
 from loguru import logger
 
-from src.application.common.dao import SubscriptionDao
+from redis.asyncio import Redis
 from src.application.common.policy import Permission, PermissionPolicy
 from src.application.dto import TelegramUserDto
-from src.core.constants import CONTAINER_KEY, USER_KEY
+from src.core.constants import CONTAINER_KEY, REMNAWAVE_MIGRATION_GUARD_KEY, USER_KEY
 from src.core.enums import MiddlewareEventType
 
 from .base import EventTypedMiddleware
@@ -27,9 +27,8 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
         data: dict[str, Any],
     ) -> Any:
         container: AsyncContainer = data[CONTAINER_KEY]
-        subscription_dao = await container.get(SubscriptionDao)
-        missing_ids = await subscription_dao.get_current_missing_remnawave_ids()
-        if not missing_ids:
+        redis = await container.get(Redis)
+        if not await redis.get(REMNAWAVE_MIGRATION_GUARD_KEY):
             return await handler(event, data)
 
         user: TelegramUserDto | None = data.get(USER_KEY)
@@ -60,10 +59,8 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
                 return await handler(event, data)
 
         logger.warning(
-            "{} blocked by Remnawave migration guard; {} current subscription(s) "
-            "still have no numeric panel ID",
+            "{} blocked by Remnawave migration guard; panel is still in migration-only mode",
             user.log,
-            len(missing_ids),
         )
         await self._deny(event)
         return None
