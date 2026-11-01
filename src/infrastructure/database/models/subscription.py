@@ -3,7 +3,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from remnawave.enums import TrafficLimitStrategy
-from sqlalchemy import DateTime, ForeignKey, Integer
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.enums import SubscriptionStatus
@@ -18,6 +18,8 @@ class Subscription(BaseSql, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_remna_id: Mapped[UUID] = mapped_column(index=True)
+    # Numeric Remnawave v3 ID. Kept separate from the historical UUID.
+    remnawave_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     user_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
