@@ -17,6 +17,8 @@ async def migration_getter(
         "local_current_subscriptions": report.get("local_current_subscriptions", 0),
         "matched": summary.get("matched", 0),
         "already_migrated": summary.get("already_migrated", 0),
+        "manually_mapped": summary.get("manually_mapped", 0),
+        "skipped_by_admin": summary.get("skipped_by_admin", 0),
         "unmatched": summary.get("unmatched", 0),
         "conflict": summary.get("conflict", 0),
         "duplicate_local_mapping": summary.get("duplicate_local_mapping", 0),
