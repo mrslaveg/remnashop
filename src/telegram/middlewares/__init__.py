@@ -20,7 +20,6 @@ def setup_middlewares(router: Router) -> None:
         AccessMiddleware(),
         ErrorMiddleware(),
         UserMiddleware(),
-        MigrationGuardMiddleware(),
         # Throttle before the heavier Rules/Channel checks (DB/Telegram API) so flood
         # is short-circuited early.
         ThrottlingMiddleware(),
@@ -30,6 +29,8 @@ def setup_middlewares(router: Router) -> None:
 
     inner_middlewares: list[EventTypedMiddleware] = [
         GarbageMiddleware(),
+        # Run after ManagerMiddleware so the active aiogram-dialog context is available.
+        MigrationGuardMiddleware(),
     ]
 
     for middleware in outer_middlewares:
