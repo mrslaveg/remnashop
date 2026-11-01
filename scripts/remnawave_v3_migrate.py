@@ -29,7 +29,10 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.core.config import AppConfig
-from src.infrastructure.database.models.remnawave_migration import RemnawaveMigrationDecision
+from src.infrastructure.database.models.remnawave_migration import (
+    RemnawaveMigrationAudit,
+    RemnawaveMigrationDecision,
+)
 from src.infrastructure.database.models.subscription import Subscription
 from src.infrastructure.database.models.user import User
 
@@ -439,7 +442,7 @@ async def _load_migration_decisions(
         return {item.subscription_id: item for item in result.scalars().all()}
 
 
-def _apply_admin_decisions(
+def _apply_admin_decisions(  # noqa: C901
     local_subscriptions: list[LocalSubscription],
     matches: list[Match],
     decisions: dict[int, RemnawaveMigrationDecision],
@@ -736,13 +739,14 @@ def _build_v2_report(
     return _mark_v2_duplicates_and_existing_ids(local_subscriptions, matches)
 
 
-async def _apply_local_mapping(
+async def _apply_local_mapping(  # noqa: C901
     session_factory: async_sessionmaker[AsyncSession],
     original: list[LocalSubscription],
     matches: list[Match],
     expected_decisions: dict[int, RemnawaveMigrationDecision],
 ) -> int:
-    if any(match.status not in {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"} for match in matches):
+    resolved_statuses = {"matched", "already_migrated", "manually_mapped", "skipped_by_admin"}
+    if any(match.status not in resolved_statuses for match in matches):
         raise RuntimeError("Refusing to apply: report contains unresolved matches")
 
     mappings = {
@@ -764,11 +768,18 @@ async def _apply_local_mapping(
             # while the local ID mapping transaction is being committed.
             await session.execute(text("LOCK TABLE subscriptions IN SHARE ROW EXCLUSIVE MODE"))
             await session.execute(text("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"))
-            await session.execute(text("LOCK TABLE remnawave_migration_decisions IN SHARE ROW EXCLUSIVE MODE"))
+            await session.execute(
+                text("LOCK TABLE remnawave_migration_decisions IN SHARE ROW EXCLUSIVE MODE")
+            )
             current_decisions_result = await session.execute(select(RemnawaveMigrationDecision))
-            current_decisions = {item.subscription_id: item for item in current_decisions_result.scalars().all()}
+            current_decisions = {
+                item.subscription_id: item
+                for item in current_decisions_result.scalars().all()
+            }
             if set(current_decisions) != set(expected_decisions):
-                raise RuntimeError("Administrator decisions changed during migration; retry dry-run")
+                raise RuntimeError(
+                    "Administrator decisions changed during migration; retry dry-run"
+                )
             for subscription_id, expected_decision in expected_decisions.items():
                 current_decision = current_decisions[subscription_id]
                 if (
@@ -777,7 +788,9 @@ async def _apply_local_mapping(
                     or current_decision.remnawave_user_id != expected_decision.remnawave_user_id
                     or current_decision.admin_telegram_id != expected_decision.admin_telegram_id
                 ):
-                    raise RuntimeError("Administrator decisions changed during migration; retry dry-run")
+                    raise RuntimeError(
+                        "Administrator decisions changed during migration; retry dry-run"
+                    )
             result = await session.execute(stmt)
             locked = result.all()
             if len(locked) != len(expected) or {
@@ -908,7 +921,8 @@ async def record_admin_decision(
                     )
                     if existing_subscription is not None or existing_decision is not None:
                         raise ValueError(
-                            f"Remnawave ID {panel_user_id} is already assigned to another local user"
+                            f"Remnawave ID {panel_user_id} is already assigned "
+                            "to another local user"
                         )
 
                 decision = await session.scalar(
@@ -1039,7 +1053,10 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
         sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
         unresolved = [
-            match for match in matches if match.status not in {"matched", "already_migrated", "skipped_by_admin"}
+            match for match in matches
+            if match.status not in {
+                "matched", "already_migrated", "manually_mapped", "skipped_by_admin"
+            }
         ]
         if unresolved:
             logger.error(
@@ -1079,7 +1096,11 @@ def main() -> int:
             "The panel is strictly read-only; default operation is dry-run."
         )
     )
-    parser.add_argument("--decision-subscription", type=int, help="persist an administrator decision for a current subscription")
+    parser.add_argument(
+        "--decision-subscription",
+        type=int,
+        help="persist an administrator decision for a current subscription",
+    )
     parser.add_argument("--decision-action", choices=("manual_map", "skip"))
     parser.add_argument("--decision-panel-id", type=int)
     parser.add_argument("--admin-telegram-id", type=int)
@@ -1095,7 +1116,10 @@ def main() -> int:
     try:
         if args.decision_subscription is not None:
             if args.decision_action is None or args.admin_telegram_id is None:
-                parser.error("--decision-subscription requires --decision-action and --admin-telegram-id")
+                parser.error(
+                    "--decision-subscription requires --decision-action "
+                    "and --admin-telegram-id"
+                )
             asyncio.run(record_admin_decision(
                 args.decision_subscription,
                 args.decision_action,
