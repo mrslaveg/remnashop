@@ -5,6 +5,7 @@ from .oauth_provider import UserOAuthProvider
 from .payment_gateway import PaymentGateway
 from .plan import Plan, PlanDuration, PlanPrice
 from .promocode import Promocode, PromocodeActivation
+from .remnawave_migration import RemnawaveMigrationAudit, RemnawaveMigrationDecision
 from .referral import Referral, ReferralReward
 from .settings import Settings
 from .subscription import Subscription
@@ -16,6 +17,8 @@ __all__ = [
     "BaseSql",
     "Promocode",
     "PromocodeActivation",
+    "RemnawaveMigrationDecision",
+    "RemnawaveMigrationAudit",
     "Broadcast",
     "BroadcastMessage",
     "UserOAuthProvider",
