@@ -99,6 +99,7 @@ async def on_migration_check(
         await callback.answer("Миграция уже выполняется.", show_alert=True)
         return
 
+    await callback.answer("Запускаю read-only проверку…")
     dialog_manager.dialog_data["migration_can_apply"] = False
     dialog_manager.dialog_data["migration_result"] = "Выполняется read-only проверка…"
     try:
@@ -148,6 +149,7 @@ async def on_migration_apply(
         await callback.answer("Миграция уже выполняется.", show_alert=True)
         return
 
+    await callback.answer("Запускаю применение только в локальной БД…")
     dialog_manager.dialog_data["migration_can_apply"] = False
     dialog_manager.dialog_data["migration_result"] = "Применение локальных ID…"
     try:
