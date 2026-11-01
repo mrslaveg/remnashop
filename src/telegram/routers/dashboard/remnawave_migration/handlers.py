@@ -47,13 +47,13 @@ async def _run_migration(apply: bool) -> tuple[int, dict[str, Any], str]:
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        output, _ = await asyncio.wait_for(process.communicate(), timeout=900)
+        _, stderr = await asyncio.wait_for(process.communicate(), timeout=900)
     except TimeoutError:
         process.kill()
         await process.wait()
         raise RuntimeError("Миграция превысила лимит времени (15 минут).")
 
-    log = output.decode("utf-8", errors="replace")
+    log = (stderr or b"").decode("utf-8", errors="replace")
     log_path.write_text(log, encoding="utf-8")
     if not report_path.exists():
         raise RuntimeError(
