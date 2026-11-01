@@ -5,6 +5,7 @@ from .base import EventTypedMiddleware
 from .channel import ChannelMiddleware
 from .error import ErrorMiddleware
 from .garbage import GarbageMiddleware
+from .migration_guard import MigrationGuardMiddleware
 from .rules import RulesMiddleware
 from .throttling import ThrottlingMiddleware
 from .user import UserMiddleware
@@ -19,6 +20,7 @@ def setup_middlewares(router: Router) -> None:
         AccessMiddleware(),
         ErrorMiddleware(),
         UserMiddleware(),
+        MigrationGuardMiddleware(),
         # Throttle before the heavier Rules/Channel checks (DB/Telegram API) so flood
         # is short-circuited early.
         ThrottlingMiddleware(),
