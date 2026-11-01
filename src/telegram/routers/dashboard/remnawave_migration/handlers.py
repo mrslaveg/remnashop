@@ -57,12 +57,12 @@ async def _run_migration(apply: bool) -> tuple[int, dict[str, Any], str]:
     log_path.write_text(log, encoding="utf-8")
     if not report_path.exists():
         raise RuntimeError(
-            "Мигратор не создал JSON-отчёт. Последние сообщения:\\n" + log[-2500:]
+            "Мигратор не создал JSON-отчёт. Последние сообщения:\n" + log[-2500:]
         )
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     log_tail = log[-2500:]
-    log_tail += f"\\nАудит: {report_path}\\nЛог: {log_path}"
+    log_tail += f"\nАудит: {report_path}\nЛог: {log_path}"
     return int(process.returncode or 0), report, log_tail
 
 
@@ -73,7 +73,7 @@ def _is_clean(report: dict[str, Any]) -> bool:
         if status not in {"matched", "already_migrated"}
     )
     return (
-        report.get("panel_api_line") in {"v2_legacy_uuid_lookup", "v3_numeric_id_stream"}
+        report.get("panel_api_line") in {"v2_legacy_uuid_lookup", "v3_users_stream"}
         and report.get("local_current_subscriptions", 0) > 0
         and unresolved == 0
         and report.get("panel_write_requests_allowed") is False
