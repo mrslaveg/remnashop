@@ -10,12 +10,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlsplit
+from uuid import UUID
 
 from httpx import AsyncClient, Request, Timeout
 from loguru import logger
@@ -31,6 +34,10 @@ from src.infrastructure.database.models.user import User
 CONFIRMATION = "REMNAWAVE_V3_LOCAL_DB_ONLY"
 PAGE_SIZE = 1000
 READ_ONLY_ENDPOINTS = {"/api/system/metadata", "/api/users/stream"}
+V2_USER_ENDPOINT = re.compile(
+    r"^/api/users/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 
 @dataclass(frozen=True)
@@ -57,8 +64,12 @@ class Match:
 
 
 async def _allow_get_only(request: Request) -> None:
-    """Allow only the two read endpoints required for the migration."""
-    if request.method.upper() != "GET" or request.url.path not in READ_ONLY_ENDPOINTS:
+    """Allow metadata, v3 user stream, and exact legacy-UUID lookups on v2."""
+    path_allowed = (
+        request.url.path in READ_ONLY_ENDPOINTS
+        or V2_USER_ENDPOINT.fullmatch(request.url.path) is not None
+    )
+    if request.method.upper() != "GET" or not path_allowed:
         raise PermissionError(
             "Read-only migration blocked Remnawave request: "
             f"{request.method} {request.url.path}"
@@ -258,12 +269,19 @@ def _match_subscription(
     return _match_secondary_identifiers(local, evidence)
 
 
-async def _fetch_panel_users(sdk: RemnawaveSDK) -> tuple[list[Any], str]:
-    metadata = await sdk.system.get_metadata()
-    panel_version = Version(str(metadata.version).removeprefix("v"))
-    if panel_version < Version("3.0.0"):
-        raise RuntimeError(f"Remnawave {panel_version} is not supported; expected v3.0.0+")
+async def _fetch_panel_version(client: AsyncClient) -> Version:
+    """Read the version using the shared metadata route available on both API lines."""
+    base_url = str(client.base_url).rstrip("/")
+    response = await client.get(f"{base_url}/system/metadata")
+    response.raise_for_status()
+    payload = response.json().get("response")
+    if not isinstance(payload, dict) or not payload.get("version"):
+        raise RuntimeError("Remnawave metadata response does not contain a version")
+    return Version(str(payload["version"]).removeprefix("v"))
 
+
+async def _fetch_panel_users_v3(sdk: RemnawaveSDK) -> list[Any]:
+    """Read the complete v3 user stream. No write-capable SDK method is called."""
     all_users: list[Any] = []
     cursor: Optional[int] = None
     seen_cursors: set[int] = set()
@@ -279,7 +297,81 @@ async def _fetch_panel_users(sdk: RemnawaveSDK) -> tuple[list[Any], str]:
             raise RuntimeError(f"Panel pagination returned a repeated cursor: {next_cursor}")
         seen_cursors.add(next_cursor)
         cursor = next_cursor
-    return all_users, str(panel_version)
+    return all_users
+
+
+async def _fetch_panel_users_v2(
+    client: AsyncClient,
+    local_subscriptions: list[LocalSubscription],
+) -> list[Any]:
+    """Resolve each legacy UUID through the v2 GET /users/{uuid} endpoint.
+
+    The response UUID must equal the requested UUID. A Telegram-ID mismatch is
+    retained for the report as a conflict; no username fallback is attempted.
+    """
+    base_url = str(client.base_url).rstrip("/")
+    users: list[Any] = []
+    seen_uuids: set[str] = set()
+
+    for local in local_subscriptions:
+        try:
+            requested_uuid = str(UUID(local.legacy_uuid))
+        except ValueError as error:
+            raise RuntimeError(
+                f"Local subscription {local.subscription_id} has an invalid legacy UUID"
+            ) from error
+
+        if requested_uuid in seen_uuids:
+            continue
+        seen_uuids.add(requested_uuid)
+
+        response = await client.get(f"{base_url}/users/{requested_uuid}")
+        if response.status_code == 404:
+            continue
+        response.raise_for_status()
+
+        envelope = response.json()
+        payload = envelope.get("response") if isinstance(envelope, dict) else None
+        if not isinstance(payload, dict):
+            raise RuntimeError(
+                f"Panel v2 returned an invalid user payload for legacy UUID {requested_uuid}"
+            )
+
+        returned_uuid = payload.get("uuid") or payload.get("vlessUuid") or payload.get("vless_uuid")
+        try:
+            canonical_returned_uuid = str(UUID(str(returned_uuid)))
+        except (TypeError, ValueError) as error:
+            raise RuntimeError(
+                f"Panel v2 did not return a valid UUID for legacy UUID {requested_uuid}"
+            ) from error
+        if canonical_returned_uuid != requested_uuid:
+            raise RuntimeError(
+                f"Panel v2 returned UUID {canonical_returned_uuid} for requested UUID "
+                f"{requested_uuid}; refusing to infer an identity"
+            )
+
+        panel_id = _as_int(payload.get("id"))
+        if panel_id is None or panel_id <= 0:
+            raise RuntimeError(
+                f"Panel v2 returned an invalid numeric ID for legacy UUID {requested_uuid}"
+            )
+
+        telegram_id = _as_int(payload.get("telegramId", payload.get("telegram_id")))
+        users.append(
+            SimpleNamespace(
+                id=panel_id,
+                uuid=canonical_returned_uuid,
+                short_uuid=payload.get("shortUuid", payload.get("short_uuid")),
+                subscription_url=payload.get(
+                    "subscriptionUrl", payload.get("subscription_url")
+                ),
+                telegram_id=telegram_id,
+                username=payload.get("username"),
+                updated_at=payload.get("updatedAt", payload.get("updated_at")),
+            )
+        )
+
+    return users
 
 
 async def _load_local_subscriptions(
@@ -379,6 +471,124 @@ def _build_report(
     return final
 
 
+
+def _build_v2_report(
+    local_subscriptions: list[LocalSubscription],
+    panel_users: list[Any],
+) -> list[Match]:
+    """Match v2 users only by the exact legacy UUID requested from the panel."""
+    by_uuid = {str(getattr(user, "uuid", "")).lower(): user for user in panel_users}
+    matches: list[Match] = []
+
+    for local in local_subscriptions:
+        panel_user = by_uuid.get(local.legacy_uuid.lower())
+        if panel_user is None:
+            matches.append(
+                Match(
+                    local.subscription_id,
+                    local.user_id,
+                    None,
+                    "unmatched",
+                    (),
+                    "Remnawave v2 did not return a user for the exact stored legacy UUID",
+                )
+            )
+            continue
+
+        panel_id = _as_int(getattr(panel_user, "id", None))
+        remote_telegram_id = _as_int(getattr(panel_user, "telegram_id", None))
+        if panel_id is None or panel_id <= 0:
+            raise ValueError("Panel v2 returned a user without a valid positive numeric id")
+
+        if (
+            local.telegram_id is not None
+            and remote_telegram_id is not None
+            and remote_telegram_id != local.telegram_id
+        ):
+            matches.append(
+                Match(
+                    local.subscription_id,
+                    local.user_id,
+                    None,
+                    "conflict",
+                    ("legacy_uuid", "telegram_id"),
+                    "The exact legacy UUID resolved, but the panel Telegram ID differs "
+                    "from the local account",
+                    (panel_id,),
+                )
+            )
+            continue
+
+        evidence = ("legacy_uuid",)
+        if local.telegram_id is not None and remote_telegram_id == local.telegram_id:
+            evidence = ("legacy_uuid", "telegram_id")
+        matches.append(
+            Match(
+                local.subscription_id,
+                local.user_id,
+                panel_id,
+                "matched",
+                evidence,
+            )
+        )
+
+    reverse: dict[int, list[Match]] = defaultdict(list)
+    for match in matches:
+        if match.status == "matched" and match.panel_user_id is not None:
+            reverse[match.panel_user_id].append(match)
+    duplicates = {
+        panel_id for panel_id, items in reverse.items() if len(items) > 1
+    }
+
+    by_subscription = {local.subscription_id: local for local in local_subscriptions}
+    final: list[Match] = []
+    for match in matches:
+        local = by_subscription[match.subscription_id]
+        if match.panel_user_id in duplicates:
+            final.append(
+                Match(
+                    match.subscription_id,
+                    match.user_id,
+                    None,
+                    "duplicate_local_mapping",
+                    match.evidence,
+                    f"Panel user {match.panel_user_id} matched multiple local current subscriptions",
+                    (match.panel_user_id,) if match.panel_user_id is not None else (),
+                )
+            )
+        elif local.existing_panel_id is not None:
+            if (
+                match.status == "matched"
+                and match.panel_user_id == local.existing_panel_id
+            ):
+                final.append(
+                    Match(
+                        match.subscription_id,
+                        match.user_id,
+                        match.panel_user_id,
+                        "already_migrated",
+                        match.evidence,
+                        candidate_panel_ids=(match.panel_user_id,),
+                    )
+                )
+            else:
+                final.append(
+                    Match(
+                        match.subscription_id,
+                        match.user_id,
+                        None,
+                        "existing_id_conflict",
+                        match.evidence,
+                        "Local numeric ID is already set and differs from the exact v2 UUID lookup",
+                        match.candidate_panel_ids,
+                    )
+                )
+        else:
+            final.append(match)
+
+    return final
+
+
 async def _apply_local_mapping(
     session_factory: async_sessionmaker[AsyncSession],
     original: list[LocalSubscription],
@@ -457,6 +667,7 @@ def _panel_snapshot_fingerprint(panel_users: list[Any]) -> tuple[tuple[Any, ...]
         records.append(
             (
                 _as_int(getattr(panel_user, "id", None)),
+                str(getattr(panel_user, "uuid", "") or "").lower(),
                 _normalize_url(getattr(panel_user, "subscription_url", None)),
                 str(getattr(panel_user, "short_uuid", "") or ""),
                 _as_int(getattr(panel_user, "telegram_id", None)),
@@ -504,16 +715,35 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
     )
     try:
         sdk = RemnawaveSDK(client)
-        panel_users, panel_version = await _fetch_panel_users(sdk)
         local = await _load_local_subscriptions(session_factory)
-        matches = _build_report(local, panel_users)
+        panel_version_value = await _fetch_panel_version(client)
+
+        if Version("2.7.0") <= panel_version_value < Version("2.9.0"):
+            panel_api_line = "v2_legacy_uuid_lookup"
+            panel_users = await _fetch_panel_users_v2(client, local)
+            matches = _build_v2_report(local, panel_users)
+        elif panel_version_value >= Version("3.0.0"):
+            panel_api_line = "v3_users_stream"
+            panel_users = await _fetch_panel_users_v3(sdk)
+            matches = _build_report(local, panel_users)
+        else:
+            raise RuntimeError(
+                f"Remnawave {panel_version_value} is not supported; expected 2.7.x/2.8.x "
+                "or 3.0.0+"
+            )
+
+        panel_version = str(panel_version_value)
         summary = _summary(matches)
 
         panel_snapshot_verified: Optional[bool] = None
         if apply:
-            second_panel_read, second_panel_version = await _fetch_panel_users(sdk)
+            second_panel_version = await _fetch_panel_version(client)
+            if panel_api_line == "v2_legacy_uuid_lookup":
+                second_panel_read = await _fetch_panel_users_v2(client, local)
+            else:
+                second_panel_read = await _fetch_panel_users_v3(sdk)
             panel_snapshot_verified = (
-                panel_version == second_panel_version
+                panel_version_value == second_panel_version
                 and _panel_snapshot_fingerprint(panel_users)
                 == _panel_snapshot_fingerprint(second_panel_read)
             )
@@ -521,6 +751,7 @@ async def run(apply: bool, confirmation: Optional[str], report_file: Path) -> in
         report = {
             "mode": "apply_local_database_only" if apply else "dry_run",
             "panel_version": panel_version,
+            "panel_api_line": panel_api_line,
             "panel_users_read": len(panel_users),
             "panel_snapshot_verified": panel_snapshot_verified,
             "local_current_subscriptions": len(local),
