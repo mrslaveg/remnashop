@@ -141,10 +141,12 @@ class RemnawaveImpl(Remnawave):
             raise ValueError(f"Invalid response from Remnawave panel: {metadata}")
 
         panel_version = Version(str(metadata.version).removeprefix("v"))
-        if panel_version < REMNAWAVE_MIN_VERSION:
+        if panel_version < REMNAWAVE_MIN_VERSION or (
+            Version("2.9.0") <= panel_version < Version("3.0.0")
+        ):
             raise RemnawaveCompatibilityError(
-                f"Remnawave panel version '{panel_version}' is not compatible. "
-                f"Minimum required version: '{REMNAWAVE_MIN_VERSION}'"
+                f"Remnawave panel version '{panel_version}' is not supported. "
+                "Supported versions: 2.7.x, 2.8.x, and 3.0.0+"
             )
 
         logger.info(f"Successfully connected to Remnawave panel (version: {panel_version})")
