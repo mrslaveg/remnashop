@@ -29,6 +29,8 @@ async def migration_getter(
             }
         ),
         "can_apply": bool(dialog_manager.dialog_data.get("migration_can_apply")),
-        "log": html.escape(dialog_manager.dialog_data.get("migration_log", "Проверка ещё не запускалась.")),
+        "log": html.escape(
+            dialog_manager.dialog_data.get("migration_log", "Проверка ещё не запускалась.")
+        ),
         "result": html.escape(dialog_manager.dialog_data.get("migration_result", "")),
     }
