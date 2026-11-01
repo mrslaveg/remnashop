@@ -1,3 +1,4 @@
+import html
 from typing import Any
 
 from aiogram_dialog import DialogManager
@@ -28,6 +29,6 @@ async def migration_getter(
             }
         ),
         "can_apply": bool(dialog_manager.dialog_data.get("migration_can_apply")),
-        "log": dialog_manager.dialog_data.get("migration_log", "Проверка ещё не запускалась."),
-        "result": dialog_manager.dialog_data.get("migration_result", ""),
+        "log": html.escape(dialog_manager.dialog_data.get("migration_log", "Проверка ещё не запускалась.")),
+        "result": html.escape(dialog_manager.dialog_data.get("migration_result", "")),
     }
