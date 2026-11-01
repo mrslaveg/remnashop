@@ -58,7 +58,7 @@ class _FakeSDK:
 
 
 def _build_adapter(users: list[SimpleNamespace]):
-    from src.infrastructure.services.remnawave import RemnawaveImpl
+    from src.infrastructure.services.remnawave import RemnawaveImpl  # noqa: PLC0415
 
     return RemnawaveImpl(_FakeSDK(users))  # type: ignore[arg-type]
 
@@ -83,7 +83,7 @@ async def test_exact_vless_uuid_resolves_from_panel_stream() -> None:
 async def test_legacy_panel_uuid_is_never_resolved_by_username() -> None:
     legacy_uuid = uuid4()
     panel_user = SimpleNamespace(id=321, vless_uuid=uuid4(), username="rs_123")
-    adapter = RemnawaveImpl(_FakeSDK([panel_user]))  # type: ignore[arg-type]
+    adapter = _build_adapter([panel_user])
 
     with pytest.raises(LookupError, match="numeric remnawave_user_id is required"):
         await adapter._resolve_user_id(legacy_uuid, username="rs_123")
