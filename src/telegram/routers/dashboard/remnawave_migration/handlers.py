@@ -76,11 +76,11 @@ def _format_issues(report: dict[str, Any]) -> list[str]:
     formatted = []
     identities = report.get("local_identities", {})
     for match in unresolved[:10]:
-        details = html.escape((match.get("details") or "Требуется ручная проверка.")[:120])
+        details = (match.get("details") or "Требуется ручная проверка.")[:120]
         identity = identities.get(str(match.get("subscription_id")), {})
         account = (
             f"TG: {identity.get('telegram_id') or '—'}"
-            + (f" (@{html.escape(identity['username'])})" if identity.get("username") else "")
+            + (f" (@{identity['username']})" if identity.get("username") else "")
         )
         candidates = match.get("candidate_panel_ids") or []
         candidate_text = f"; кандидаты: {candidates[:10]}" if candidates else ""
