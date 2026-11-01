@@ -55,6 +55,8 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
             command = (event.text or "").split(maxsplit=1)[0].split("@", 1)[0]
             if command in {"/start", "/remnawave_migration"}:
                 return await handler(event, data)
+            if dialog_state == "DashboardRemnawaveMigration:REVIEW":
+                return await handler(event, data)
 
         if isinstance(event, CallbackQuery):
             payload = remove_intent_id(event.data or "")
@@ -66,7 +68,7 @@ class MigrationGuardMiddleware(EventTypedMiddleware):
             if (
                 dialog_state
                 and dialog_state.startswith("DashboardRemnawaveMigration:")
-                and action in {"migration_check", "migration_apply", "migration_confirm", "back"}
+                and action in {"migration_check", "migration_review", "migration_apply", "migration_confirm", "back"}
             ):
                 return await handler(event, data)
 
