@@ -2,12 +2,13 @@ from aiogram import Dispatcher
 from fastapi import FastAPI
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 from starlette.middleware.cors import CORSMiddleware
 
 from src.__version__ import __version__
 from src.core.config import AppConfig
+from src.core.constants import API_V1, REMNAWAVE_WEBHOOK_PATH
 from src.lifespan import lifespan
 
 from .endpoints import (
@@ -43,6 +44,29 @@ def get_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.state.remnawave_migration_only = False
+
+    @app.middleware("http")
+    async def migration_mode_http_guard(request, call_next):
+        if not getattr(request.app.state, "remnawave_migration_only", False):
+            return await call_next(request)
+
+        allowed_paths = {
+            config.bot.webhook_path,
+            f"{API_V1}{REMNAWAVE_WEBHOOK_PATH}",
+        }
+        if request.url.path not in allowed_paths:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": (
+                        "Remnawave migration is in progress. "
+                        "Public API and payment operations are temporarily disabled."
+                    )
+                },
+                headers={"Retry-After": "60"},
+            )
+        return await call_next(request)
 
     app.include_router(health_router)
     app.include_router(payments_router)
