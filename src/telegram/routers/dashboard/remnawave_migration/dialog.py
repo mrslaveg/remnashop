@@ -1,7 +1,6 @@
 from aiogram_dialog import Dialog, StartMode, Window
 
 from src.core.enums import BannerName
-from src.telegram.keyboards import main_menu_button
 from src.telegram.states import Dashboard, DashboardRemnawaveMigration
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.telegram.widgets.kbd import Button, Row, Start, SwitchTo
@@ -36,7 +35,6 @@ main = Window(
             state=Dashboard.MAIN,
             mode=StartMode.RESET_STACK,
         ),
-        *main_menu_button,
     ),
     IgnoreUpdate(),
     state=DashboardRemnawaveMigration.MAIN,
