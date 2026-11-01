@@ -67,8 +67,13 @@ jobs:
           src/application/events/system.py
           src/application/events/__init__.py
           src/core/constants.py
+          src/infrastructure/database/models/subscription.py
+          src/application/dto/subscription.py
+          src/infrastructure/database/migrations/versions/0041_add_remnawave_v3_user_id.py
+          scripts/remnawave_v3_migrate.py
+          tests/test_remnawave_v3_migration.py
       - name: Compile application sources
-        run: uv run python -m compileall -q src
+        run: uv run python -m compileall -q src scripts
       - name: Verify new SDK imports
         run: >-
           uv run python -c
