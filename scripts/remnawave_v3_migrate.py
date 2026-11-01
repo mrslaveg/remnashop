@@ -10,10 +10,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
-import sys
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -27,7 +27,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.core.config import AppConfig
 from src.infrastructure.database.models.subscription import Subscription
 from src.infrastructure.database.models.user import User
-
 
 CONFIRMATION = "REMNAWAVE_V3_LOCAL_DB_ONLY"
 PAGE_SIZE = 1000
