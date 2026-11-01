@@ -2,13 +2,14 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from httpx import Request
+from httpx import AsyncClient, MockTransport, Request, Response
 
 from scripts.remnawave_v3_migrate import (
     LocalSubscription,
     _allow_get_only,
     _build_report,
     _build_v2_report,
+    _fetch_panel_users_v2,
     _index_panel_users,
     _match_subscription,
     _panel_snapshot_fingerprint,
@@ -197,6 +198,46 @@ def test_v2_duplicate_legacy_uuid_mapping_is_blocked():
     matches = _build_v2_report([first, second], [remote])
 
     assert {match.status for match in matches} == {"duplicate_local_mapping"}
+
+
+
+
+@pytest.mark.asyncio
+async def test_v2_fetch_queries_only_the_exact_stored_uuid():
+    legacy_uuid = str(uuid4())
+    source = local("https://sub.example/sub/token-1", legacy_uuid=legacy_uuid)
+    requests: list[Request] = []
+
+    async def handler(request: Request) -> Response:
+        requests.append(request)
+        return Response(
+            200,
+            json={
+                "response": {
+                    "uuid": legacy_uuid,
+                    "id": 987,
+                    "telegramId": 123,
+                    "shortUuid": "token-1",
+                    "subscriptionUrl": source.url,
+                    "username": "rs_123",
+                }
+            },
+            request=request,
+        )
+
+    async with AsyncClient(
+        base_url="https://panel.example/api",
+        transport=MockTransport(handler),
+        event_hooks={"request": [_allow_get_only]},
+    ) as client:
+        users = await _fetch_panel_users_v2(client, [source])
+
+    assert len(users) == 1
+    assert users[0].id == 987
+    assert users[0].uuid == legacy_uuid
+    assert len(requests) == 1
+    assert requests[0].method == "GET"
+    assert requests[0].url.path == f"/api/users/{legacy_uuid}"
 
 
 @pytest.mark.asyncio
