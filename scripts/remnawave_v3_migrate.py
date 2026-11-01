@@ -479,11 +479,20 @@ def _build_report(
 
     reverse: dict[int, list[Match]] = defaultdict(list)
     for match in matches:
-        if (
-            match.status in {"matched", "already_migrated"}
-            and match.panel_user_id is not None
-        ):
-            reverse[match.panel_user_id].append(match)
+        assigned_id = (
+            match.panel_user_id
+            if match.status in {"matched", "already_migrated"}
+            else None
+        )
+        if assigned_id is None:
+            local = next(
+                item
+                for item in local_subscriptions
+                if item.subscription_id == match.subscription_id
+            )
+            assigned_id = local.existing_panel_id
+        if assigned_id is not None:
+            reverse[assigned_id].append(match)
 
     duplicates = {
         panel_id: items for panel_id, items in reverse.items() if len(items) > 1
