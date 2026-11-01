@@ -77,16 +77,16 @@ class RemnaWebhookService:
             await self._process_sync(event, remna_user)
             return
 
-        user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
-        if not user:
-            logger.warning(f"Local user not found for remna_uuid '{remna_user.uuid}'")
+        identity = await self._get_local_identity(remna_user)
+        if identity is None:
             return
+        user, mapped_subscription = identity
 
         current_subscription = await self.subscription_dao.get_current(user.id)
-        if not current_subscription:
+        if not current_subscription or current_subscription.id != mapped_subscription.id:
             logger.warning(
-                f"Current subscription not found for '{user.remna_name}', "
-                f"status event '{event}' processing aborted"
+                f"Current subscription mapping does not match Remnawave user ID "
+                f"'{remna_user.id}', status event '{event}' processing aborted"
             )
             return
 
@@ -146,10 +146,10 @@ class RemnaWebhookService:
     ) -> None:
         logger.info(f"Received device event '{event}' for RemnaUser '{remna_user.uuid}'")
 
-        user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
-        if not user:
-            logger.warning(f"Local user not found for remna_uuid '{remna_user.uuid}'")
+        identity = await self._get_local_identity(remna_user)
+        if identity is None:
             return
+        user, _ = identity
 
         if event == RemnaUserHwidDevicesEvent.ADDED:
             await self.event_bus.publish(
@@ -271,12 +271,47 @@ class RemnaWebhookService:
         )
 
     async def _process_not_connected(self, remna_user: RemnaUserDto) -> None:
-        user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
-        if not user:
-            logger.warning(f"Local user not found for remna_uuid '{remna_user.uuid}'")
+        identity = await self._get_local_identity(remna_user)
+        if identity is None:
             return
+        user, _ = identity
         support_url = f"{T_ME}{self.config.bot.support_username.get_secret_value()}"
         await self.event_bus.publish(UserNotConnectedEvent(user=user, support_url=support_url))
+
+    async def _get_local_identity(
+        self, remna_user: RemnaUserDto
+    ) -> Optional[tuple[UserDto, SubscriptionDto]]:
+        """Resolve a v3 webhook identity through its numeric panel ID."""
+        raw_panel_id = getattr(remna_user, "id", None)
+        try:
+            panel_user_id = int(raw_panel_id)
+        except (TypeError, ValueError):
+            logger.warning(
+                f"Webhook user '{getattr(remna_user, 'uuid', None)}' "
+                "does not contain a valid numeric Remnawave ID"
+            )
+            return None
+
+        if panel_user_id <= 0:
+            logger.warning(f"Webhook contains invalid Remnawave user ID '{panel_user_id}'")
+            return None
+
+        subscription = await self.subscription_dao.get_by_remnawave_id(panel_user_id)
+        if not subscription:
+            logger.warning(
+                f"Local current subscription not found for Remnawave user ID '{panel_user_id}'"
+            )
+            return None
+
+        user = await self.user_dao.get_by_id(subscription.user_id)
+        if not user:
+            logger.warning(
+                f"Local user '{subscription.user_id}' not found for Remnawave "
+                f"user ID '{panel_user_id}'"
+            )
+            return None
+
+        return user, subscription
 
     async def handle_torrent_blocker_event(self, report: TorrentBlockerReportDto) -> None:
         logger.info("Received torrent blocker webhook event")
@@ -362,11 +397,13 @@ class RemnaWebhookService:
 
     async def _process_delete_subscription(self, remna_user: RemnaUserDto) -> None:
         async with self.uow:
-            subscription = await self.subscription_dao.get_by_remna_id(remna_user.uuid)
+            panel_user_id = int(remna_user.id)
+            subscription = await self.subscription_dao.get_by_remnawave_id(panel_user_id)
 
             if not subscription:
                 logger.warning(
-                    f"Subscription not found for UUID '{remna_user.uuid}', delete aborted"
+                    f"Current subscription not found for Remnawave user ID "
+                    f"'{panel_user_id}', delete aborted"
                 )
                 return
 
@@ -376,18 +413,14 @@ class RemnaWebhookService:
 
             current_subscription = await self.subscription_dao.get_current(user_id)
 
-            if current_subscription:
-                if current_subscription.user_remna_id != subscription.user_remna_id:
-                    logger.debug(
-                        f"Subscription '{subscription.user_remna_id}' "
-                        f"is not current for user_id '{user_id}', skipping unlinking"
-                    )
-                else:
-                    logger.debug(f"Unlinked current subscription for user_id '{user_id}'")
-                    await self.user_dao.clear_current_subscription(user_id)
+            if current_subscription and current_subscription.id == subscription.id:
+                logger.debug(f"Unlinked current subscription for user_id '{user_id}'")
+                await self.user_dao.clear_current_subscription(user_id)
 
             await self.uow.commit()
-            logger.info(f"Successfully processed deletion for subscription '{remna_user.uuid}'")
+            logger.info(
+                f"Successfully processed deletion for Remnawave user ID '{panel_user_id}'"
+            )
 
     async def _process_status(
         self,
