@@ -115,10 +115,14 @@ class RemnawaveImpl(Remnawave):
 
     async def _resolve_user_id(
         self,
-        user_uuid: UUID,
+        user_uuid: UUID | int,
         *,
         username: Optional[str] = None,
     ) -> int:
+        if isinstance(user_uuid, int) and not isinstance(user_uuid, bool):
+            if user_uuid <= 0:
+                raise ValueError(f"Invalid Remnawave numeric user id: {user_uuid}")
+            return user_uuid
         key = UUID(str(user_uuid))
         cached = self._user_ids.get(key)
         if cached is not None:
@@ -197,7 +201,7 @@ class RemnawaveImpl(Remnawave):
     async def update_user(
         self,
         user: UserDto,
-        uuid: UUID,
+        uuid: UUID | int,
         plan: Optional[PlanSnapshotDto] = None,
         subscription: Optional[SubscriptionDto] = None,
         reset_traffic: bool = False,
@@ -215,17 +219,17 @@ class RemnawaveImpl(Remnawave):
             await self.reset_traffic(uuid, username=user.remna_name)
         return updated
 
-    async def enable_user(self, uuid: UUID, *, username: Optional[str] = None) -> None:
+    async def enable_user(self, uuid: UUID | int, *, username: Optional[str] = None) -> None:
         user_id = await self._resolve_user_id(uuid, username=username)
         await self.sdk.users.enable_user(user_id)
         logger.info(f"Remnawave user '{uuid}' enabled")
 
-    async def disable_user(self, uuid: UUID, *, username: Optional[str] = None) -> None:
+    async def disable_user(self, uuid: UUID | int, *, username: Optional[str] = None) -> None:
         user_id = await self._resolve_user_id(uuid, username=username)
         await self.sdk.users.disable_user(user_id)
         logger.info(f"Remnawave user '{uuid}' disabled")
 
-    async def delete_user(self, uuid: UUID, *, username: Optional[str] = None) -> bool:
+    async def delete_user(self, uuid: UUID | int, *, username: Optional[str] = None) -> bool:
         try:
             user_id = await self._resolve_user_id(uuid, username=username)
             await self.sdk.users.delete_user(user_id)
@@ -234,7 +238,7 @@ class RemnawaveImpl(Remnawave):
                 logger.debug(f"Remnawave user '{uuid}' was not found")
                 return False
             raise
-        self._user_ids.pop(UUID(str(uuid)), None)
+        self._user_ids.pop(UUID(str(uuid)), None) if isinstance(uuid, UUID) else None
         if username:
             self._username_ids.pop(username, None)
         else:
@@ -245,7 +249,7 @@ class RemnawaveImpl(Remnawave):
         return True
 
     async def get_user_by_uuid(
-        self, uuid: UUID, *, username: Optional[str] = None
+        self, uuid: UUID | int, *, username: Optional[str] = None
     ) -> Optional[RemnawaveUser]:
         try:
             user_id = await self._resolve_user_id(uuid, username=username)
@@ -323,7 +327,7 @@ class RemnawaveImpl(Remnawave):
         )
         return int(response.total)
 
-    async def delete_all_devices(self, user_uuid: UUID, *, username: Optional[str] = None) -> None:
+    async def delete_all_devices(self, user_uuid: UUID | int, *, username: Optional[str] = None) -> None:
         try:
             user_id = await self._resolve_user_id(user_uuid, username=username)
             result = await self.sdk.hwid.delete_all_hwid_user(
@@ -335,7 +339,7 @@ class RemnawaveImpl(Remnawave):
             raise
         logger.info(f"Deleted all HWID devices ({result.total}) for user '{user_uuid}'")
 
-    async def drop_connections(self, user_uuid: UUID, *, username: Optional[str] = None) -> None:
+    async def drop_connections(self, user_uuid: UUID | int, *, username: Optional[str] = None) -> None:
         try:
             user_id = await self._resolve_user_id(user_uuid, username=username)
             await self.sdk.connections.drop_connections(
@@ -348,7 +352,7 @@ class RemnawaveImpl(Remnawave):
             logger.warning(f"Failed to drop connections for Remnawave user '{user_uuid}': {error}")
 
     async def reset_traffic(
-        self, uuid: UUID, *, username: Optional[str] = None
+        self, uuid: UUID | int, *, username: Optional[str] = None
     ) -> Optional[RemnawaveUser]:
         try:
             user_id = await self._resolve_user_id(uuid, username=username)
@@ -442,7 +446,7 @@ class RemnawaveImpl(Remnawave):
     async def _build_update_request(
         self,
         user: UserDto,
-        uuid: UUID,
+        uuid: UUID | int,
         plan: Optional[PlanSnapshotDto],
         subscription: Optional[SubscriptionDto],
     ) -> UpdateUserBodyDto:
