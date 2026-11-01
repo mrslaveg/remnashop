@@ -4,9 +4,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from src.infrastructure.services.remnawave import RemnawaveImpl
-
 from src.core.types import RemnaUserView
+from src.infrastructure.services.remnawave import RemnawaveImpl
 
 
 def test_v3_user_view_uses_vless_uuid_as_subscription_identifier() -> None:
