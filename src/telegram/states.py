@@ -217,6 +217,7 @@ class DashboardRemnawave(StatesGroup):
 
 class DashboardRemnawaveMigration(StatesGroup):
     MAIN = State()
+    REVIEW = State()
     CONFIRM = State()
 
 
