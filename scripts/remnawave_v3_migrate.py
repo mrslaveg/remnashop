@@ -24,7 +24,7 @@ from httpx import AsyncClient, Request, Timeout
 from loguru import logger
 from packaging.version import Version
 from remnawave import RemnawaveSDK
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.core.config import AppConfig
@@ -678,15 +678,21 @@ async def _apply_local_mapping(
     stmt = (
         select(Subscription, User)
         .join(User, User.current_subscription_id == Subscription.id)
-        .where(Subscription.id.in_(list(expected)))
+        .order_by(Subscription.id)
         .with_for_update()
     )
     changed = 0
     async with session_factory() as session:
         async with session.begin():
+            # Prevent concurrent subscription creation/current-subscription switches
+            # while the local ID mapping transaction is being committed.
+            await session.execute(text("LOCK TABLE subscriptions IN SHARE ROW EXCLUSIVE MODE"))
+            await session.execute(text("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"))
             result = await session.execute(stmt)
             locked = result.all()
-            if len(locked) != len(expected):
+            if len(locked) != len(expected) or {
+                subscription.id for subscription, _ in locked
+            } != set(expected):
                 raise RuntimeError(
                     "Local current subscriptions changed during migration; retry dry-run"
                 )
