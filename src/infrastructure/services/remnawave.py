@@ -31,6 +31,7 @@ from src.application.dto import (
 )
 from src.core.constants import REMNAWAVE_MIN_VERSION
 from src.core.enums import SubscriptionStatus
+from src.core.exceptions import RemnawaveCompatibilityError
 from src.core.types import RemnaUserView as RemnawaveUser
 from src.core.utils.converters import days_to_datetime, gb_to_bytes
 from src.core.utils.time import datetime_now
@@ -141,7 +142,7 @@ class RemnawaveImpl(Remnawave):
 
         panel_version = Version(str(metadata.version).removeprefix("v"))
         if panel_version < REMNAWAVE_MIN_VERSION:
-            raise ValueError(
+            raise RemnawaveCompatibilityError(
                 f"Remnawave panel version '{panel_version}' is not compatible. "
                 f"Minimum required version: '{REMNAWAVE_MIN_VERSION}'"
             )
