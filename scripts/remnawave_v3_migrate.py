@@ -472,66 +472,57 @@ def _build_report(
 
 
 
-def _build_v2_report(
-    local_subscriptions: list[LocalSubscription],
-    panel_users: list[Any],
-) -> list[Match]:
-    """Match v2 users only by the exact legacy UUID requested from the panel."""
-    by_uuid = {str(getattr(user, "uuid", "")).lower(): user for user in panel_users}
-    matches: list[Match] = []
-
-    for local in local_subscriptions:
-        panel_user = by_uuid.get(local.legacy_uuid.lower())
-        if panel_user is None:
-            matches.append(
-                Match(
-                    local.subscription_id,
-                    local.user_id,
-                    None,
-                    "unmatched",
-                    (),
-                    "Remnawave v2 did not return a user for the exact stored legacy UUID",
-                )
-            )
-            continue
-
-        panel_id = _as_int(getattr(panel_user, "id", None))
-        remote_telegram_id = _as_int(getattr(panel_user, "telegram_id", None))
-        if panel_id is None or panel_id <= 0:
-            raise ValueError("Panel v2 returned a user without a valid positive numeric id")
-
-        if (
-            local.telegram_id is not None
-            and remote_telegram_id is not None
-            and remote_telegram_id != local.telegram_id
-        ):
-            matches.append(
-                Match(
-                    local.subscription_id,
-                    local.user_id,
-                    None,
-                    "conflict",
-                    ("legacy_uuid", "telegram_id"),
-                    "The exact legacy UUID resolved, but the panel Telegram ID differs "
-                    "from the local account",
-                    (panel_id,),
-                )
-            )
-            continue
-
-        evidence = ("legacy_uuid",)
-        if local.telegram_id is not None and remote_telegram_id == local.telegram_id:
-            evidence = ("legacy_uuid", "telegram_id")
-        matches.append(
-            Match(
-                local.subscription_id,
-                local.user_id,
-                panel_id,
-                "matched",
-                evidence,
-            )
+def _match_v2_subscription(
+    local: LocalSubscription,
+    panel_user: Optional[Any],
+) -> Match:
+    if panel_user is None:
+        return Match(
+            local.subscription_id,
+            local.user_id,
+            None,
+            "unmatched",
+            (),
+            "Remnawave v2 did not return a user for the exact stored legacy UUID",
         )
 
+    panel_id = _as_int(getattr(panel_user, "id", None))
+    remote_telegram_id = _as_int(getattr(panel_user, "telegram_id", None))
+    if panel_id is None or panel_id <= 0:
+        raise ValueError("Panel v2 returned a user without a valid positive numeric id")
+
+    if (
+        local.telegram_id is not None
+        and remote_telegram_id is not None
+        and remote_telegram_id != local.telegram_id
+    ):
+        return Match(
+            local.subscription_id,
+            local.user_id,
+            None,
+            "conflict",
+            ("legacy_uuid", "telegram_id"),
+            "The exact legacy UUID resolved, but the panel Telegram ID differs "
+            "from the local account",
+            (panel_id,),
+        )
+
+    evidence = ("legacy_uuid",)
+    if local.telegram_id is not None and remote_telegram_id == local.telegram_id:
+        evidence = ("legacy_uuid", "telegram_id")
+    return Match(
+        local.subscription_id,
+        local.user_id,
+        panel_id,
+        "matched",
+        evidence,
+    )
+
+
+def _mark_v2_duplicates_and_existing_ids(
+    local_subscriptions: list[LocalSubscription],
+    matches: list[Match],
+) -> list[Match]:
     reverse: dict[int, list[Match]] = defaultdict(list)
     for match in matches:
         if match.status == "matched" and match.panel_user_id is not None:
@@ -552,7 +543,10 @@ def _build_v2_report(
                     None,
                     "duplicate_local_mapping",
                     match.evidence,
-                    f"Panel user {match.panel_user_id} matched multiple local current subscriptions",
+                    (
+                        f"Panel user {match.panel_user_id} matched multiple "
+                        "local current subscriptions"
+                    ),
                     (match.panel_user_id,) if match.panel_user_id is not None else (),
                 )
             )
@@ -579,7 +573,7 @@ def _build_v2_report(
                         None,
                         "existing_id_conflict",
                         match.evidence,
-                        "Local numeric ID is already set and differs from the exact v2 UUID lookup",
+                        "Local numeric ID differs from the exact v2 UUID lookup",
                         match.candidate_panel_ids,
                     )
                 )
@@ -587,6 +581,19 @@ def _build_v2_report(
             final.append(match)
 
     return final
+
+
+def _build_v2_report(
+    local_subscriptions: list[LocalSubscription],
+    panel_users: list[Any],
+) -> list[Match]:
+    """Match v2 users only by the exact legacy UUID requested from the panel."""
+    by_uuid = {str(getattr(user, "uuid", "")).lower(): user for user in panel_users}
+    matches = [
+        _match_v2_subscription(local, by_uuid.get(local.legacy_uuid.lower()))
+        for local in local_subscriptions
+    ]
+    return _mark_v2_duplicates_and_existing_ids(local_subscriptions, matches)
 
 
 async def _apply_local_mapping(
