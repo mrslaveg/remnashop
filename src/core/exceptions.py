@@ -5,6 +5,9 @@ from typing import Union
 class MenuRenderError(Exception): ...
 
 
+class RemnawaveCompatibilityError(ValueError): ...
+
+
 class PermissionDeniedError(Exception): ...
 
 
