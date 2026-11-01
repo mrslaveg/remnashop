@@ -67,14 +67,43 @@ class SubscriptionDaoImpl(SubscriptionDao, BaseDaoImpl):
         return None
 
     async def get_by_remna_id(self, user_remna_id: UUID) -> Optional[SubscriptionDto]:
-        stmt = select(Subscription).where(Subscription.user_remna_id == user_remna_id)
+        stmt = (
+            select(Subscription)
+            .where(Subscription.user_remna_id == user_remna_id)
+            .order_by(Subscription.created_at.desc())
+            .limit(1)
+        )
         db_subscription = await self.session.scalar(stmt)
 
         if db_subscription:
-            logger.debug(f"Subscription found by remna ID '{user_remna_id}'")
+            logger.debug(f"Subscription found by legacy Remnawave UUID '{user_remna_id}'")
             return self._convert_to_dto(db_subscription)
 
-        logger.debug(f"Subscription with remna ID '{user_remna_id}' not found")
+        logger.debug(f"Subscription with legacy Remnawave UUID '{user_remna_id}' not found")
+        return None
+
+    async def get_by_remnawave_id(
+        self, remnawave_user_id: int
+    ) -> Optional[SubscriptionDto]:
+        """Find the current local subscription for a numeric Remnawave user ID."""
+        stmt = (
+            select(Subscription)
+            .join(User, User.current_subscription_id == Subscription.id)
+            .where(Subscription.remnawave_user_id == remnawave_user_id)
+            .order_by(Subscription.created_at.desc())
+            .limit(1)
+        )
+        db_subscription = await self.session.scalar(stmt)
+
+        if db_subscription:
+            logger.debug(
+                f"Current subscription found by Remnawave numeric ID '{remnawave_user_id}'"
+            )
+            return self._convert_to_dto(db_subscription)
+
+        logger.debug(
+            f"Current subscription with Remnawave numeric ID '{remnawave_user_id}' not found"
+        )
         return None
 
     async def get_by_url(self, url: str) -> Optional[SubscriptionDto]:
