@@ -98,6 +98,7 @@ btn-dashboard =
     .remnashop = 🛍 RemnaShop
     .transactions = 🧾 Транзакции
     .importer = 📥 Импорт пользователей
+    .remnawave-migration = 🔄 Миграция Remnawave v3
 
 btn-statistics =
     .users = 👥 Пользователи
@@ -545,6 +546,11 @@ btn-remnawave =
     .hosts = 🌐 Хосты
     .nodes = 🖥️ Ноды
     .inbounds = 🔌 Инбаунды
+
+btn-remnawave-migration =
+    .check = 🔍 Проверить соответствия
+    .apply = 🧩 Перейти к применению
+    .confirm = ⚠️ Применить только в БД бота
 
 btn-importer =
     .from-xui = 💩 Импорт из панели 3X-UI
